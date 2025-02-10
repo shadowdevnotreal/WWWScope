@@ -2,6 +2,21 @@ import streamlit as st
 import os
 import internetarchive
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from dataclasses import dataclass
+from typing import Optional
+from enum import Enum
+
+@dataclass
+class ArchiveResult:
+    status: str
+    message: str
+    details: Optional[str] = None
+
+class ArchiveStatus(Enum):
+    SUCCESS = "✅"
+    FAILURE = "❌"
+    PENDING = "⏳"
 
 class WebArchiver:
     def __init__(self):
@@ -39,36 +54,52 @@ class WebArchiver:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-def upload_warc(file: UploadedFile) -> ArchiveResult:
-    """Upload a WARC file to local storage"""
-    try:
-        # Get file properties
-        file_name = file.name
-        file_size = file.size
-        file_type = file.type
-        last_modified = file.last_modified
+class WARCManager:
+    def __init__(self):
+        self.upload_folder = Path("local_archives")
+        self.upload_folder.mkdir(exist_ok=True, parents=True)
         
-        # Validate file type
-        if not file_name.lower().endswith(('.warc', '.warc.gz')):
+    def upload_warc(self, file: st.uploaded_file_manager.UploadedFile) -> ArchiveResult:
+        """Upload a WARC file to local storage"""
+        try:
+            # Get file properties
+            file_name = file.name
+            
+            # Validate file type
+            if not file_name.lower().endswith(('.warc', '.warc.gz')):
+                return ArchiveResult(
+                    status=ArchiveStatus.FAILURE.value,
+                    message="Invalid file type. Only .warc and .warc.gz files are allowed"
+                )
+            
+            # Write file to disk
+            file_path = self.upload_folder / file_name
+            with open(file_path, "wb") as f:
+                f.write(file.getbuffer())
+            
+            return ArchiveResult(
+                status=ArchiveStatus.SUCCESS.value,
+                message=f"File uploaded successfully: {file_name}"
+            )
+        except Exception as e:
             return ArchiveResult(
                 status=ArchiveStatus.FAILURE.value,
-                message="Invalid file type. Only .warc and .warc.gz files are allowed"
+                message=f"Error uploading file: {str(e)}"
             )
-        
-        # Write file to disk
-        file_path = os.path.join("local_archives", file_name)
-        with open(file_path, "wb") as f:
-            f.write(file.getbuffer())
-        
-        return ArchiveResult(
-            status=ArchiveStatus.SUCCESS.value,
-            message=f"File uploaded successfully: {file_name}"
-        )
-    except Exception as e:
-        return ArchiveResult(
-            status=ArchiveStatus.FAILURE.value,
-            message=f"Error uploading file: {str(e)}"
-        )
+
+def main():
+    st.title("WARC File Uploader")
+    
+    # File uploader
+    uploaded_file = st.file_uploader("Choose a WARC file", type=["warc", "warc.gz"])
+    
+    if uploaded_file is not None:
+        warc_manager = WARCManager()
+        result = warc_manager.upload_warc(uploaded_file)
+        st.write(result.message)
+
+if __name__ == "__main__":
+    main()
         
             
 def main():
