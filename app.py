@@ -3,6 +3,8 @@ import streamlit as st
 import requests
 import concurrent.futures
 import random
+from functools import lru_cache
+from typing import Dict, Any
 
 # Check if Selenium is available
 try:
@@ -11,12 +13,11 @@ try:
     from selenium.webdriver.chrome.service import Service
     from webdriver_manager.chrome import ChromeDriverManager
     from selenium.webdriver.chrome.options import Options
-
     SELENIUM_AVAILABLE = True
 except ImportError:
     SELENIUM_AVAILABLE = False
 
-# Archive.today Mirrors
+# Constants
 ARCHIVE_TODAY_MIRRORS = [
     "https://archive.today",
     "https://archive.ph",
@@ -24,84 +25,103 @@ ARCHIVE_TODAY_MIRRORS = [
     "https://archive.fo"
 ]
 
-# Archive & Retrieve Endpoints
 ARCHIVE_SITES = {
     "Wayback Machine": "https://web.archive.org/save/",
     "Archive.today": "https://archive.today/submit/",
     "Memento": "http://timetravel.mementoweb.org/api/json/"
 }
 
+# Utility functions
+@lru_cache(maxsize=100)
+def rate_limited_request(url: str) -> requests.Response:
+    """Make a rate-limited request to avoid overwhelming servers."""
+    time.sleep(1)  # Basic rate limiting
+    return requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
 
-def submit_to_wayback(url):
+def validate_url(url: str) -> bool:
+    """Validate if the URL is accessible and properly formatted."""
+    if not url.startswith(('http://', 'https://')):
+        return False
     try:
-        # Send request to archive the URL
+        response = requests.head(url, timeout=5)
+        return response.ok
+    except:
+        return False
+
+def get_selenium_driver():
+    """Initialize and return a configured Selenium WebDriver."""
+    if not SELENIUM_AVAILABLE:
+        return None
+    
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    
+    try:
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+        return driver
+    except Exception as e:
+        st.error(f"Failed to initialize Chrome driver: {e}")
+        return None
+
+def submit_to_wayback(url: str) -> str:
+    """Submit URL to Wayback Machine."""
+    try:
         response = requests.post(
-            "https://web.archive.org/save/",
+            ARCHIVE_SITES["Wayback Machine"],
             data={"url": url},
             headers={"User-Agent": "Mozilla/5.0"},
             timeout=30,
         )
-
-        # Check if the archive request was successful
-        if response.ok:
-            # Extract the archive URL
-            archive_url = f"https://web.archive.org/web/*/{url}"
-
-            # Wait a few seconds before checking if it exists
-            time.sleep(5)
-            verify_response = requests.get(archive_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
-
-            # Check if the archive exists
-            if verify_response.ok:
-                return f"✅ Archived Successfully: {archive_url}"
-            else:
-                return "❌ Archive.org claimed success but the archive is missing."
-        else:
-            return "❌ Archive.org failed to archive the URL."
-    except requests.exceptions.RequestException as e:
-        return f"⚠️ Error: {e}"
-
-# Ensure the mirrors list is not empty
-if not ARCHIVE_TODAY_MIRRORS:
-    raise ValueError("Error: Archive.today mirrors list is empty!")
-
-# Function to submit URL to Archive.today
-def submit_to_archive_today(url):
-    
-    # If Selenium is available, use it
-    if SELENIUM_AVAILABLE:
+        
+        if response.status_code == 429:
+            return "❌ Rate limit exceeded. Please wait and try again."
+        elif not response.ok:
+            return f"❌ Archive.org failed with status code: {response.status_code}"
+            
+        archive_url = f"https://web.archive.org/web/*/{url}"
+        time.sleep(5)
+        
         try:
-            options = Options()
-            options.add_argument("--headless")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
+            verify_response = rate_limited_request(archive_url)
+            return f"✅ Archived Successfully: {archive_url}" if verify_response.ok else "❌ Archive verification failed"
+        except requests.exceptions.Timeout:
+            return "⚠️ Archive verification timed out, but submission may have succeeded"
             
-            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-            
-            for mirror in ARCHIVE_TODAY_MIRRORS:
-                try:
-                    driver.get(mirror)
-                    time.sleep(3)
+    except Exception as e:
+        return f"⚠️ Error: {str(e)}"
 
-                    input_box = driver.find_element(By.NAME, "url")
-                    input_box.send_keys(url)
-                    input_box.submit()
+def submit_to_archive_today(url: str) -> str:
+    """Submit URL to Archive.today using either Selenium or requests."""
+    if SELENIUM_AVAILABLE:
+        driver = get_selenium_driver()
+        if driver:
+            try:
+                for mirror in ARCHIVE_TODAY_MIRRORS:
+                    try:
+                        driver.get(mirror)
+                        time.sleep(3)
 
-                    time.sleep(10)  # Allow time for processing
+                        input_box = driver.find_element(By.NAME, "url")
+                        input_box.send_keys(url)
+                        input_box.submit()
 
-                    archived_url = driver.current_url
-                    driver.quit()
-                    return f"✅ Archived Successfully: {archived_url}"
-                except Exception:
-                    continue  # Try next mirror
+                        time.sleep(10)
+                        archived_url = driver.current_url
+                        driver.quit()
+                        return f"✅ Archived Successfully: {archived_url}"
+                    except Exception:
+                        continue
+                driver.quit()
+            except Exception as e:
+                st.warning(f"Selenium failed: {e}")
 
-            driver.quit()
-        except Exception as e:
-            st.warning(f"Selenium failed: {e}")
-
-    # If Selenium is not available, use Requests instead
+    # Fallback to requests if Selenium fails or is not available
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "User-Agent": "Mozilla/5.0",
         "Referer": random.choice(ARCHIVE_TODAY_MIRRORS)
     }
 
@@ -111,122 +131,87 @@ def submit_to_archive_today(url):
                 f"{mirror}/submit/",
                 data={"url": url},
                 headers=headers,
-                timeout=40  # Increased timeout
+                timeout=40
             )
             if response.ok:
                 return f"✅ Archived Successfully at {mirror}"
         except requests.exceptions.RequestException:
-            continue  # Try next mirror
+            continue
 
     return "❌ Archive.today failed on all mirrors."
 
-
-# Retrieve from Memento Web
-def retrieve_memento_links(url):
+def retrieve_memento_links(url: str) -> Dict[str, Any]:
+    """Retrieve archived versions from Memento Web."""
     try:
-        params = {"url": url}
-        response = requests.get(ARCHIVE_SITES["Memento"], params=params, timeout=10)
+        response = rate_limited_request(f"{ARCHIVE_SITES['Memento']}?url={url}")
         if response.ok:
             return response.json()
-        else:
-            return "No archived versions found."
+        return "No archived versions found."
     except Exception as e:
-        return f"Error: {e}"
+        return f"Error: {str(e)}"
+
+def process_service(service: str, url: str, mode: str) -> str:
+    """Process a single archive service request."""
+    try:
+        if mode == "Archive URL":
+            if service == "Wayback Machine":
+                return submit_to_wayback(url)
+            elif service == "Archive.today":
+                return submit_to_archive_today(url)
+        else:
+            if service == "Memento":
+                return retrieve_memento_links(url)
+            elif service == "Wayback Machine":
+                return f"Check archived versions at: https://web.archive.org/web/*/{url}"
+            elif service == "Archive.today":
+                return f"Search manually at: https://archive.today/{url}"
+    except Exception as e:
+        return f"Error processing {service}: {str(e)}"
 
 # Streamlit UI
-st.title("🌍 WWWScope – Web Archiving & Retrieval")
-st.write("Archive and retrieve web pages from multiple services.")
+def main():
+    st.title("🌍 WWWScope – Web Archiving & Retrieval")
+    st.write("Archive and retrieve web pages from multiple services.")
 
-# 📌 **Add User Input for URL**
-url = st.text_input("Enter the URL to archive or retrieve:")
+    url = st.text_input("Enter the URL to archive or retrieve:")
+    mode = st.radio("Choose Mode:", ["Archive URL", "Retrieve Archived Versions"])
 
-# Choose mode
-mode = st.radio("Choose Mode:", ["Archive URL", "Retrieve Archived Versions"])
+    services = st.multiselect(
+        "Select Services:",
+        ["Wayback Machine", "Archive.today", "Memento"],
+        default=["Wayback Machine"]
+    )
 
-# Select Services
-services = st.multiselect(
-    "Select Services:",
-    ["Wayback Machine", "Archive.today", "Memento"],
-    default=["Wayback Machine"]
-)
+    if st.button("Submit"):
+        if not url:
+            st.error("Please enter a valid URL.")
+            return
+            
+        if not validate_url(url):
+            st.error("Please enter a valid URL starting with http:// or https://")
+            return
 
-# Button to Archive or Retrieve
-if st.button("Submit"):
-    if not url:
-        st.error("Please enter a valid URL.")
-    else:
         results = {}
+        progress_bar = st.progress(0)
+        status_text = st.empty()
 
-        def process_service(service):
-            if mode == "Archive URL":
-                if service == "Wayback Machine":
-                    return submit_to_wayback(url)
-                elif service == "Archive.today":
-                    return submit_to_archive_today(url)
-            elif mode == "Retrieve Archived Versions":
-                if service == "Wayback Machine":
-                    return f"Check archived versions at: https://web.archive.org/web/*/{url}"
-                elif service == "Archive.today":
-                    return f"Search manually at: https://archive.today/{url}"
-                elif service == "Memento":
-                    return retrieve_memento_links(url)
+        with st.spinner("Processing requests..."):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(services)) as executor:
+                future_to_service = {
+                    executor.submit(process_service, service, url, mode): service 
+                    for service in services
+                }
+                
+                for idx, future in enumerate(concurrent.futures.as_completed(future_to_service)):
+                    service = future_to_service[future]
+                    status_text.text(f"Processing {service}...")
+                    progress_bar.progress((idx + 1) / len(services))
+                    
+                    try:
+                        results[service] = future.result()
+                    except Exception as e:
+                        results[service] = f"Failed: {str(e)}"
 
-        # Run services in parallel
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_service = {executor.submit(process_service, s): s for s in services}
-            for future in concurrent.futures.as_completed(future_to_service):
-                service = future_to_service[future]
-                try:
-                    results[service] = future.result()
-                except Exception as e:
-                    results[service] = f"Error: {e}"
-
-        # Display results
+        status_text.empty()
+        progress_bar.empty()
         st.json(results)
-        
-# Existing imports and configurations
-import streamlit as st
-import requests
-import concurrent.futures
-
-# 📌 **Add URL Input for Archiving & Retrieval**
-st.title("🌍 WWWScope – Web Archiving & Retrieval")
-st.write("Archive and retrieve web pages from multiple services.")
-
-url = st.text_input("Enter the URL to archive or retrieve:")
-mode = st.radio("Choose Mode:", ["Archive URL", "Retrieve Archived Versions"])
-
-services = st.multiselect(
-    "Select Services:",
-    ["Wayback Machine", "Archive.today", "Memento"],
-    default=["Wayback Machine"]
-)
-
-if st.button("Submit"):
-    if not url:
-        st.error("Please enter a valid URL.")
-    else:
-        results = {}
-
-        def process_service(service):
-            if mode == "Archive URL":
-                return requests.get(f"https://web.archive.org/save/{url}").url if service == "Wayback Machine" else f"https://archive.today/{url}"
-            elif mode == "Retrieve Archived Versions":
-                return f"Check archive at: https://web.archive.org/web/*/{url}" if service == "Wayback Machine" else f"Search manually at: https://archive.today/{url}"
-
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_service = {executor.submit(process_service, s): s for s in services}
-            for future in concurrent.futures.as_completed(future_to_service):
-                service = future_to_service[future]
-                results[service] = future.result()
-
-        st.json(results)
-
-# 📌 **Existing WARC Upload Code Below**
-st.header("📂 Upload & Sync WARC Files")
-uploaded_file = st.file_uploader("Upload WARC File", type=["warc", "warc.gz"])
-if uploaded_file:
-    st.success(f"File uploaded: {uploaded_file.name}")
-
-if st.button("🔄 Sync Local Archives"):
-    st.write("Syncing WARC files to public storage...")
