@@ -236,7 +236,6 @@ class WebArchiver:
             )
 
 class WARCManager:
-class WARCManager:
     def __init__(self):
         self.upload_folder = Path("local_archives")
         self.upload_folder.mkdir(exist_ok=True, parents=True)
