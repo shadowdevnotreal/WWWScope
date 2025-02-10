@@ -11,9 +11,20 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
 
 # S3 & Internet Archive Configuration (Add to Streamlit Secrets for Security)
-S3_BUCKET = "your-public-s3-bucket"
-S3_ACCESS_KEY = st.secrets["S3_ACCESS_KEY"]
-S3_SECRET_KEY = st.secrets["S3_SECRET_KEY"]
+# S3_BUCKET = "your-public-s3-bucket"
+# S3_ACCESS_KEY = st.secrets["S3_ACCESS_KEY"]
+# S3_SECRET_KEY = st.secrets["S3_SECRET_KEY"]
+
+## To run public bucket 
+# import boto3
+# import botocore
+# s3 = boto3.client("s3", config=boto3.session.Config(signature_version=botocore.UNSIGNED))
+# bucket_name = "your-public-bucket-name"
+
+# Example: List public files in the S3 bucket
+# response = s3.list_objects_v2(Bucket=bucket_name)
+# files = [obj["Key"] for obj in response.get("Contents", [])]
+# st.write("Public files in S3 bucket:", files)
 
 # Ensure Upload Directory Exists
 UPLOAD_FOLDER = "local_archives"
