@@ -1,22 +1,43 @@
-import os
+import random
+import time
 import streamlit as st
 import requests
-import time
+import os
+import boto3
+import internetarchive
 import concurrent.futures
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional
-import internetarchive
-from dataclasses import dataclass
-from pathlib import Path
+
+# Check if Selenium is available (for Archive.today)
+try:
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.chrome.service import Service
+    from webdriver_manager.chrome import ChromeDriverManager
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.common.exceptions import TimeoutException
+
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
+
+# Archive & Retrieve Endpoints
+ARCHIVE_SITES = {
+    "Wayback Machine": "https://web.archive.org/save/",
+    "Archive.today": "https://archive.today/submit/",
+    "Memento": "http://timetravel.mementoweb.org/api/json/"
+}
+
+ARCHIVE_TODAY_MIRRORS = [
+    "https://archive.today",
+    "https://archive.ph",
+    "https://archive.is",
+    "https://archive.fo"
+]
 
 @dataclass
 class ArchiveResult:
@@ -28,6 +49,12 @@ class ArchiveStatus(Enum):
     SUCCESS = "✅"
     FAILURE = "❌"
     PENDING = "⏳"
+
+@dataclass
+class ArchiveResult:
+    status: str
+    message: str
+    details: Optional[str] = None
 
 class SeleniumConfig:
     def __init__(self):
@@ -56,7 +83,7 @@ class SeleniumConfig:
         """Initialize Chrome driver with anti-detection settings"""
         options = self.get_chrome_options()
         driver = webdriver.Chrome(
-            service=Service(ChromeManager().install()),
+            service=Service(ChromeDriverManager().install()),
             options=options
         )
         driver.execute_cdp_cmd('Network.setUserAgentOverride', {
@@ -71,18 +98,17 @@ class WebArchiver:
         self.services = {
             "archive": {
                 "Wayback Machine": "https://web.archive.org/save/",
-                "Archive.today": [
-                    "https://archive.today",
-                    "https://archive.ph",
-                    "https://archive.is",
-                    "https://archive.fo"
-                ],
+                "Archive.today": ["https://archive.today", "https://archive.ph"],
                 "Memento": "http://timetravel.mementoweb.org/api/json/"
+            },
+            "retrieve": {
+                "Memento": "http://timetravel.mementoweb.org/api/json/",
+                "Internet Archive": "https://archive.org"
             }
         }
         
     def initialize_driver(self):
-        """Initialize Selenium driver with anti-detection settings"""
+        """Initialize Selenium driver"""
         try:
             self.driver = self.config.get_driver()
             return True
@@ -157,7 +183,7 @@ class WebArchiver:
             try:
                 options = self.config.get_chrome_options()
                 driver = webdriver.Chrome(
-                    service=Service(ChromeManager().install()),
+                    service=Service(ChromeDriverManager().install()),
                     options=options
                 )
                 
@@ -166,7 +192,7 @@ class WebArchiver:
                         driver.get(mirror)
                         time.sleep(3)
                         
-                        input_box = driver.find_element(By.NAME, "url")
+                        input_box = driver.find_element("name", "url")
                         input_box.send_keys(url)
                         input_box.submit()
                         time.sleep(10)  # Allow processing
@@ -237,51 +263,43 @@ class WebArchiver:
 
 class WARCManager:
     def __init__(self):
-        self.upload_folder = Path("local_archives")
-        self.upload_folder.mkdir(exist_ok=True, parents=True)
+        self.upload_folder = "local_archives"
+        os.makedirs(self.upload_folder, exist_ok=True)
         
     def upload_warc(self, file: st.uploaded_file_manager.UploadedFile) -> ArchiveResult:
         """Upload a WARC file to local storage"""
         try:
-            # Get file properties
-            file_name = file.name
-            
-            # Validate file type
-            if not file_name.lower().endswith(('.warc', '.warc.gz')):
-                return ArchiveResult(
-                    status=ArchiveStatus.FAILURE.value,
-                    message="Invalid file type. Only .warc and .warc.gz files are allowed"
-                )
-            
-            # Write file to disk
-            file_path = self.upload_folder / file_name
+            file_path = os.path.join(self.upload_folder, file.name)
             with open(file_path, "wb") as f:
                 f.write(file.getbuffer())
-            
             return ArchiveResult(
                 status=ArchiveStatus.SUCCESS.value,
-                message=f"File uploaded successfully: {file_name}"
+                message=f"File uploaded to {file_path}"
             )
         except Exception as e:
             return ArchiveResult(
                 status=ArchiveStatus.FAILURE.value,
-                message=f"Error uploading file: {str(e)}"
+                message=f"Error uploading: {str(e)}"
             )
-
-def main():
-    st.title("WARC File Uploader")
     
-    # File uploader
-    uploaded_file = st.file_uploader("Choose a WARC file", type=["warc", "warc.gz"])
-    
-    if uploaded_file is not None:
-        warc_manager = WARCManager()
-        result = warc_manager.upload_warc(uploaded_file)
-        st.write(result.message)
-
-if __name__ == "__main__":
-    main()
-
+    def sync_to_internet_archive(self, file_name: str) -> ArchiveResult:
+        """Sync a local WARC file to Internet Archive"""
+        try:
+            file_path = os.path.join(self.upload_folder, file_name)
+            item = internetarchive.upload(
+                file_name,
+                files=[file_path],
+                metadata={"title": file_name}
+            )
+            return ArchiveResult(
+                status=ArchiveStatus.SUCCESS.value,
+                message=f"Uploaded to Internet Archive: {item.identifier}"
+            )
+        except Exception as e:
+            return ArchiveResult(
+                status=ArchiveStatus.FAILURE.value,
+                message=f"Error uploading: {str(e)}"
+            )
 
 def main():
     st.title("🌍 WWWScope – Web Archiving & Retrieval")
