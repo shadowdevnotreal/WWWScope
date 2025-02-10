@@ -7,6 +7,10 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
@@ -32,21 +36,31 @@ class SeleniumConfig:
         return 'STREAMLIT_CLOUD' in os.environ
     
     def get_chrome_options(self) -> Options:
-        """Get Chrome options based on environment"""
+        """Get Chrome options with anti-detection settings"""
         options = Options()
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
+        
         if self.is_cloud:
             options.add_argument('--headless')
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
+        
         return options
     
     def get_driver(self) -> webdriver.Chrome:
-        """Initialize Chrome driver based on environment"""
+        """Initialize Chrome driver with anti-detection settings"""
         options = self.get_chrome_options()
-        return webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()),
+        driver = webdriver.Chrome(
+            service=Service(ChromeManager().install()),
             options=options
         )
+        driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+            "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36'
+        })
+        return driver
 
 class WebArchiver:
     def __init__(self):
@@ -55,17 +69,18 @@ class WebArchiver:
         self.services = {
             "archive": {
                 "Wayback Machine": "https://web.archive.org/save/",
-                "Archive.today": ["https://archive.today", "https://archive.ph"],
+                "Archive.today": [
+                    "https://archive.today",
+                    "https://archive.ph",
+                    "https://archive.is",
+                    "https://archive.fo"
+                ],
                 "Memento": "http://timetravel.mementoweb.org/api/json/"
-            },
-            "retrieve": {
-                "Memento": "http://timetravel.mementoweb.org/api/json/",
-                "Internet Archive": "https://archive.org"
             }
         }
         
     def initialize_driver(self):
-        """Initialize Selenium driver"""
+        """Initialize Selenium driver with anti-detection settings"""
         try:
             self.driver = self.config.get_driver()
             return True
@@ -140,7 +155,7 @@ class WebArchiver:
             try:
                 options = self.config.get_chrome_options()
                 driver = webdriver.Chrome(
-                    service=Service(ChromeDriverManager().install()),
+                    service=Service(ChromeManager().install()),
                     options=options
                 )
                 
@@ -149,7 +164,7 @@ class WebArchiver:
                         driver.get(mirror)
                         time.sleep(3)
                         
-                        input_box = driver.find_element("name", "url")
+                        input_box = driver.find_element(By.NAME, "url")
                         input_box.send_keys(url)
                         input_box.submit()
                         time.sleep(10)  # Allow processing
