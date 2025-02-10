@@ -235,8 +235,8 @@ class WebArchiver:
                 status=ArchiveStatus.FAILURE.value,
                 message=f"Error: {str(e)}"
             )
-
-   def upload_warc(file: UploadedFile) -> ArchiveResult:
+            
+    def upload_warc(file: UploadedFile) -> ArchiveResult:
     """Upload a WARC file to local storage"""
     try:
         # Get file properties
