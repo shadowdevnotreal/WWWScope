@@ -233,12 +233,14 @@ class WebArchiver:
                 message=f"Error: {str(e)}"
             )
 
+from streamlit.uploaded_file_manager import UploadedFile
+
 class WARCManager:
     def __init__(self):
         self.upload_folder = "local_archives"
         os.makedirs(self.upload_folder, exist_ok=True)
         
-    def upload_warc(self, file: st.uploaded_file_manager.UploadedFile) -> ArchiveResult:
+    def upload_warc(self, file: UploadedFile) -> ArchiveResult:
         """Upload a WARC file to local storage"""
         try:
             file_path = os.path.join(self.upload_folder, file.name)
