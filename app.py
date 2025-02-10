@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
 import internetarchive
-from st.file_uploader import UploadedFile
+from file_uploader import UploadedFile
 from pathlib import Path
 
 @dataclass
