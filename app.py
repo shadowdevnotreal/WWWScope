@@ -15,9 +15,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
 import internetarchive
-from streamlit.uploaded_file_manager import UploadedFile
+# from streamlit.uploaded_file_manager import UploadedFile
 from dataclasses import dataclass
 from pathlib import Path
+import st.file_uploader
+
 
 @dataclass
 class ArchiveResult:
