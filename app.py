@@ -5,12 +5,18 @@ import os
 import boto3
 import internetarchive
 import concurrent.futures
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.options import Options
 
+# Check if Selenium is available
+try:
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.chrome.service import Service
+    from webdriver_manager.chrome import ChromeDriverManager
+    from selenium.webdriver.chrome.options import Options
+
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
 
 # Archive & Retrieve Endpoints
 ARCHIVE_SITES = {
@@ -48,53 +54,6 @@ def submit_to_wayback(url):
             return "❌ Archive.org failed to archive the URL."
     except requests.exceptions.RequestException as e:
         return f"⚠️ Error: {e}"
-
-# Submit URL to Archive.today
-def submit_to_archive_today(url):
-    archive_today_mirrors = [
-        "https://archive.today",
-        "https://archive.ph",
-        "https://archive.is",
-        "https://archive.fo"
-    ]
-
-    options = Options()
-    options.add_argument("--headless")  # Run in headless mode
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-
-    for mirror in archive_today_mirrors:
-        try:
-            driver.get(mirror)
-            time.sleep(3)
-
-            input_box = driver.find_element(By.NAME, "url")
-            input_box.send_keys(url)
-            input_box.submit()
-
-            time.sleep(10)  # Allow time for processing
-
-            archived_url = driver.current_url
-            driver.quit()
-            return f"✅ Archived Successfully: {archived_url}"
-        except Exception as e:
-            continue  # Try next mirror
-
-    driver.quit()
-    return "❌ Archive.today failed on all mirrors."
-# Retrieve from Memento Web
-def retrieve_memento_links(url):
-    try:
-        params = {"url": url}
-        response = requests.get(ARCHIVE_SITES["Memento"], params=params, timeout=10)
-        if response.ok:
-            return response.json()
-        else:
-            return "No archived versions found."
-    except Exception as e:
-        return f"Error: {e}"
 
 # Streamlit UI
 st.title("🌍 WWWScope – Web Archiving & Retrieval")
