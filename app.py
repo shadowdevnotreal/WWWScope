@@ -1,6 +1,5 @@
 import os
 import streamlit as st
-from streamlit import UploadedFile
 import requests
 import time
 import concurrent.futures
@@ -236,13 +235,12 @@ class WebArchiver:
                 message=f"Error: {str(e)}"
             )
 
-
 class WARCManager:
     def __init__(self):
         self.upload_folder = Path("local_archives")
         self.upload_folder.mkdir(exist_ok=True, parents=True)
         
-    def upload_warc(self, file: st.file_manager.UploadedFile) -> ArchiveResult:
+    def upload_warc(self, file: st.uploaded_file_manager.UploadedFile) -> ArchiveResult:
         """Upload a WARC file to local storage"""
         try:
             # Get file properties
@@ -283,6 +281,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
 def main():
     st.title("🌍 WWWScope – Web Archiving & Retrieval")
     
