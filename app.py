@@ -41,17 +41,6 @@ class WebArchiver:
 
 from streamlit.uploaded_file_manager import UploadedFile
 
-@dataclass
-class ArchiveResult:
-    status: str
-    message: str
-    details: Optional[str] = None
-
-class ArchiveStatus(Enum):
-    SUCCESS = "✅"
-    FAILURE = "❌"
-    PENDING = "⏳"
-
 class WARCManager:
     def __init__(self):
         self.upload_folder = Path("local_archives")
