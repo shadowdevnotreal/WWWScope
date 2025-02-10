@@ -39,8 +39,6 @@ class WebArchiver:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-from streamlit.uploaded_file_manager import UploadedFile
-
 class WARCManager:
     def __init__(self):
         self.upload_folder = Path("local_archives")
