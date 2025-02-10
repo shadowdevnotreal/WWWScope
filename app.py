@@ -18,7 +18,7 @@ import internetarchive
 # from streamlit.uploaded_file_manager import UploadedFile
 from dataclasses import dataclass
 from pathlib import Path
-import st.file_uploader
+import file_uploader
 
 
 @dataclass
