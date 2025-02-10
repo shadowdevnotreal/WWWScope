@@ -96,7 +96,6 @@ class WARCManager:
                 message=f"Error processing file: {str(e)}"
             )
             
-
 def main():
     st.title("🌍 WWWScope – Web Archiving & Retrieval")
     
