@@ -243,7 +243,7 @@ class WARCManager:
         self.upload_folder.mkdir(exist_ok=True, parents=True)
         
     def upload_warc(file: UploadedFile) -> ArchiveResult:
-    """Upload a WARC file to local storage"""
+        """Upload a WARC file to local storage"""
     try:
         # Get file properties
         file_name = file.name
