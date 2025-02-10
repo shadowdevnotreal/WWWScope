@@ -242,36 +242,36 @@ class WARCManager:
         self.upload_folder = Path("local_archives")
         self.upload_folder.mkdir(exist_ok=True, parents=True)
         
-    def upload_warc(file: UploadedFile) -> ArchiveResult:
+    def upload_warc(self, file: UploadedFile) -> ArchiveResult:
         """Upload a WARC file to local storage"""
-    try:
-        # Get file properties
-        file_name = file.name
-        file_size = file.size
-        file_type = file.type
-        last_modified = file.last_modified
-        
-        # Validate file type
-        if not file_name.lower().endswith(('.warc', '.warc.gz')):
+        try:
+            # Get file properties
+            file_name = file.name
+            file_size = file.size
+            file_type = file.type
+            last_modified = file.last_modified
+            
+            # Validate file type
+            if not file_name.lower().endswith(('.warc', '.warc.gz')):
+                return ArchiveResult(
+                    status=ArchiveStatus.FAILURE.value,
+                    message="Invalid file type. Only .warc and .warc.gz files are allowed"
+                )
+            
+            # Write file to disk
+            file_path = self.upload_folder / file_name
+            with open(file_path, "wb") as f:
+                f.write(file.getbuffer())
+            
+            return ArchiveResult(
+                status=ArchiveStatus.SUCCESS.value,
+                message=f"File uploaded successfully: {file_name}"
+            )
+        except Exception as e:
             return ArchiveResult(
                 status=ArchiveStatus.FAILURE.value,
-                message="Invalid file type. Only .warc and .warc.gz files are allowed"
+                message=f"Error uploading file: {str(e)}"
             )
-        
-        # Write file to disk
-        file_path = os.path.join("local_archives", file_name)
-        with open(file_path, "wb") as f:
-            f.write(file.getbuffer())
-        
-        return ArchiveResult(
-            status=ArchiveStatus.SUCCESS.value,
-            message=f"File uploaded successfully: {file_name}"
-        )
-    except Exception as e:
-        return ArchiveResult(
-            status=ArchiveStatus.FAILURE.value,
-            message=f"Error uploading file: {str(e)}"
-        )
 
 def main():
     st.title("🌍 WWWScope – Web Archiving & Retrieval")
