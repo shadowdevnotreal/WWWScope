@@ -69,7 +69,7 @@ def upload_warc(file: UploadedFile) -> ArchiveResult:
             status=ArchiveStatus.FAILURE.value,
             message=f"Error uploading file: {str(e)}"
         )
-            )
+        
             
 def main():
     st.title("🌍 WWWScope – Web Archiving & Retrieval")
