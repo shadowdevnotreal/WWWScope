@@ -18,6 +18,11 @@ This tool allows you to archive web pages, compare archived versions, and sync W
 
 ✅ Run locally OR deploy on Streamlit Cloud
 
+## Support FOSS future development - Simping for donations here 👇
+
+<a href="https://www.buymeacoffee.com/diatasso">
+    <img src="https://img.buymeacoffee.com/button-api/?text=Buy me a cat&emoji=🐈&slug=notarealdev&button_colour=9123cd&font_colour=ffffff&font_family=Bree&outline_colour=ffffff&coffee_colour=FFDD00" />
+</a>
 
 ---
 
