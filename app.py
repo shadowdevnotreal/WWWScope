@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+from streamlit.uploaded_file_manager import UploadedFile
 import requests
 import time
 import concurrent.futures
@@ -15,7 +16,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
 import internetarchive
-from streamlit import UploadedFile
 from dataclasses import dataclass
 from pathlib import Path
 
