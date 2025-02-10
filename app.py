@@ -1,6 +1,6 @@
 import os
 import streamlit as st
-from streamlit.uploaded_file_manager import UploadedFile
+from streamlit.uploaded import UploadedFile
 import requests
 import time
 import concurrent.futures
