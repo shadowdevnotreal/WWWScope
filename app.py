@@ -21,19 +21,42 @@ ARCHIVE_SITES = {
 # Submit URL to Wayback Machine
 def submit_to_wayback(url):
     try:
-        response = requests.get(ARCHIVE_SITES["Wayback Machine"] + url, timeout=10)
-        return response.url if response.ok else "Failed to archive"
-    except Exception as e:
+        response = requests.post(
+            "https://web.archive.org/save/",
+            data={"url": url},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=20,
+        )
+        if response.ok:
+            return f"Archived successfully: {response.url}"
+        else:
+            return "Wayback Machine failed to archive."
+    except requests.exceptions.RequestException as e:
         return f"Error: {e}"
 
 # Submit URL to Archive.today
+ARCHIVE_TODAY_MIRRORS = [
+    "https://archive.today",
+    "https://archive.ph",
+    "https://archive.is",
+    "https://archive.fo",
+]
+
 def submit_to_archive_today(url):
-    try:
-        data = {"url": url}
-        response = requests.post(ARCHIVE_SITES["Archive.today"], data=data, timeout=10)
-        return response.url if response.ok else "Failed to archive"
-    except Exception as e:
-        return f"Error: {e}"
+    for mirror in ARCHIVE_TODAY_MIRRORS:
+        try:
+            response = requests.post(
+                f"{mirror}/submit/",
+                data={"url": url},
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=30,  # Increased timeout
+            )
+            if response.ok:
+                return f"Archived successfully: {response.url}"
+        except requests.exceptions.RequestException as e:
+            continue  # Try the next mirror
+
+    return "Archive.today failed on all mirrors."
 
 # Retrieve from Memento Web
 def retrieve_memento_links(url):
