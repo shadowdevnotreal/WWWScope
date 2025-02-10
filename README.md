@@ -80,8 +80,9 @@ git push -u origin main
 ### 2️⃣ Deploy on Streamlit Cloud
 
 1. Go to Streamlit Cloud.
-2. Click New App.
-3. Select your GitHub repo.
+https://share.streamlit.io/
+3. Click New App.
+4. Select your GitHub repo.
 - Branch: main
 - Main file path: app.py
 
@@ -118,3 +119,31 @@ S3_ACCESS_KEY = st.secrets["S3_ACCESS_KEY"]
 S3_SECRET_KEY = st.secrets["S3_SECRET_KEY"]
 ```
 ---
+## 🔧 Browser Extension for One-Click Archiving
+
+### 1️⃣ Create a Chrome Extension
+1. Create a folder
+```
+chrome_extension/
+```
+3. Add a manifest.json file:
+```
+{
+  "name": "Quick Archive",
+  "version": "1.0",
+  "permissions": ["activeTab"],
+  "background": { "scripts": ["background.js"] },
+  "browser_action": {
+    "default_popup": "popup.html"
+  },
+  "manifest_version": 2
+}
+```
+3. Add background.js:
+```
+chrome.browserAction.onClicked.addListener(tab => {
+    let url = encodeURIComponent(tab.url);
+    fetch(`https://your-streamlit-app-url.com/archive?url=${url}`);
+});
+```
+4. Load it in Chrome (chrome://extensions/) as an unpacked extension.
