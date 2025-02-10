@@ -242,14 +242,11 @@ class WARCManager:
         self.upload_folder = Path("local_archives")
         self.upload_folder.mkdir(exist_ok=True, parents=True)
         
-    def upload_warc(self, file: UploadedFile) -> ArchiveResult:
+    def upload_warc(self, file: st.uploaded_file_manager.UploadedFile) -> ArchiveResult:
         """Upload a WARC file to local storage"""
         try:
             # Get file properties
             file_name = file.name
-            file_size = file.size
-            file_type = file.type
-            last_modified = file.last_modified
             
             # Validate file type
             if not file_name.lower().endswith(('.warc', '.warc.gz')):
@@ -272,6 +269,20 @@ class WARCManager:
                 status=ArchiveStatus.FAILURE.value,
                 message=f"Error uploading file: {str(e)}"
             )
+
+def main():
+    st.title("WARC File Uploader")
+    
+    # File uploader
+    uploaded_file = st.file_uploader("Choose a WARC file", type=["warc", "warc.gz"])
+    
+    if uploaded_file is not None:
+        warc_manager = WARCManager()
+        result = warc_manager.upload_warc(uploaded_file)
+        st.write(result.message)
+
+if __name__ == "__main__":
+    main()
 
 def main():
     st.title("🌍 WWWScope – Web Archiving & Retrieval")
