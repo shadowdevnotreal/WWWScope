@@ -1,49 +1,19 @@
-import random
-import time
+import os
 import streamlit as st
 import requests
-import os
-import boto3
-import internetarchive
+import time
 import concurrent.futures
-from typing import Dict, List, Optional
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
 from dataclasses import dataclass
 from enum import Enum
-
-# Check if Selenium is available (for Archive.today)
-try:
-    from selenium import webdriver
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.chrome.service import Service
-    from webdriver_manager.chrome import ChromeDriverManager
-    from selenium.webdriver.chrome.options import Options
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.common.exceptions import TimeoutException
-
-    SELENIUM_AVAILABLE = True
-except ImportError:
-    SELENIUM_AVAILABLE = False
-
-# Archive & Retrieve Endpoints
-ARCHIVE_SITES = {
-    "Wayback Machine": "https://web.archive.org/save/",
-    "Archive.today": "https://archive.today/submit/",
-    "Memento": "http://timetravel.mementoweb.org/api/json/"
-}
-
-ARCHIVE_TODAY_MIRRORS = [
-    "https://archive.today",
-    "https://archive.ph",
-    "https://archive.is",
-    "https://archive.fo"
-]
-
-@dataclass
-class ArchiveResult:
-    status: str
-    message: str
-    details: Optional[str] = None
+from typing import Dict, List, Optional
 
 class ArchiveStatus(Enum):
     SUCCESS = "✅"
