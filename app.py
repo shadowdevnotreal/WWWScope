@@ -10,6 +10,94 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
 
+
+# Archive & Retrieve Endpoints
+ARCHIVE_SITES = {
+    "Wayback Machine": "https://web.archive.org/save/",
+    "Archive.today": "https://archive.today/submit/",
+    "Memento": "http://timetravel.mementoweb.org/api/json/"
+}
+
+# Submit URL to Wayback Machine
+def submit_to_wayback(url):
+    try:
+        response = requests.get(ARCHIVE_SITES["Wayback Machine"] + url, timeout=10)
+        return response.url if response.ok else "Failed to archive"
+    except Exception as e:
+        return f"Error: {e}"
+
+# Submit URL to Archive.today
+def submit_to_archive_today(url):
+    try:
+        data = {"url": url}
+        response = requests.post(ARCHIVE_SITES["Archive.today"], data=data, timeout=10)
+        return response.url if response.ok else "Failed to archive"
+    except Exception as e:
+        return f"Error: {e}"
+
+# Retrieve from Memento Web
+def retrieve_memento_links(url):
+    try:
+        params = {"url": url}
+        response = requests.get(ARCHIVE_SITES["Memento"], params=params, timeout=10)
+        if response.ok:
+            return response.json()
+        else:
+            return "No archived versions found."
+    except Exception as e:
+        return f"Error: {e}"
+
+# Streamlit UI
+st.title("🌍 WWWScope – Web Archiving & Retrieval")
+st.write("Archive and retrieve web pages from multiple services.")
+
+# 📌 **Add User Input for URL**
+url = st.text_input("Enter the URL to archive or retrieve:")
+
+# Choose mode
+mode = st.radio("Choose Mode:", ["Archive URL", "Retrieve Archived Versions"])
+
+# Select Services
+services = st.multiselect(
+    "Select Services:",
+    ["Wayback Machine", "Archive.today", "Memento"],
+    default=["Wayback Machine"]
+)
+
+# Button to Archive or Retrieve
+if st.button("Submit"):
+    if not url:
+        st.error("Please enter a valid URL.")
+    else:
+        results = {}
+
+        def process_service(service):
+            if mode == "Archive URL":
+                if service == "Wayback Machine":
+                    return submit_to_wayback(url)
+                elif service == "Archive.today":
+                    return submit_to_archive_today(url)
+            elif mode == "Retrieve Archived Versions":
+                if service == "Wayback Machine":
+                    return f"Check archived versions at: https://web.archive.org/web/*/{url}"
+                elif service == "Archive.today":
+                    return f"Search manually at: https://archive.today/{url}"
+                elif service == "Memento":
+                    return retrieve_memento_links(url)
+
+        # Run services in parallel
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_to_service = {executor.submit(process_service, s): s for s in services}
+            for future in concurrent.futures.as_completed(future_to_service):
+                service = future_to_service[future]
+                try:
+                    results[service] = future.result()
+                except Exception as e:
+                    results[service] = f"Error: {e}"
+
+        # Display results
+        st.json(results)
+
 # S3 & Internet Archive Configuration (Add to Streamlit Secrets for Security)
 # S3_BUCKET = "your-public-s3-bucket"
 # S3_ACCESS_KEY = st.secrets["S3_ACCESS_KEY"]
