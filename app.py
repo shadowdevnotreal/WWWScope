@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
 import internetarchive
+from streamlit.uploaded_file_manager import UploadedFile
+from pathlib import Path
 
 @dataclass
 class ArchiveResult:
@@ -233,46 +235,62 @@ class WebArchiver:
                 message=f"Error: {str(e)}"
             )
 
-from streamlit.uploaded_file_manager import UploadedFile
-
+class WARCManager:
 class WARCManager:
     def __init__(self):
-        self.upload_folder = "local_archives"
-        os.makedirs(self.upload_folder, exist_ok=True)
+        self.upload_folder = Path("local_archives")
+        self.upload_folder.mkdir(exist_ok=True, parents=True)
         
     def upload_warc(self, file: UploadedFile) -> ArchiveResult:
-        """Upload a WARC file to local storage"""
+        """Upload a WARC file to local storage with validation"""
         try:
-            file_path = os.path.join(self.upload_folder, file.name)
-            with open(file_path, "wb") as f:
-                f.write(file.getbuffer())
-            return ArchiveResult(
-                status=ArchiveStatus.SUCCESS.value,
-                message=f"File uploaded to {file_path}"
-            )
+            # Validate file extension
+            if not file.name.lower().endswith(('.warc', '.warc.gz')):
+                return ArchiveResult(
+                    status=ArchiveStatus.FAILURE.value,
+                    message="Invalid file type. Only .warc and .warc.gz files are allowed"
+                )
+            
+            # Create full file path
+            file_path = self.upload_folder / file.name
+            
+            # Check if file already exists
+            if file_path.exists():
+                return ArchiveResult(
+                    status=ArchiveStatus.FAILURE.value,
+                    message=f"File {file.name} already exists"
+                )
+            
+            # Write file with proper error handling
+            try:
+                with open(file_path, "wb") as f:
+                    f.write(file.getbuffer())
+                
+                # Verify file was written
+                if not file_path.exists():
+                    return ArchiveResult(
+                        status=ArchiveStatus.FAILURE.value,
+                        message="File was not written successfully"
+                    )
+                
+                return ArchiveResult(
+                    status=ArchiveStatus.SUCCESS.value,
+                    message=f"File uploaded to {str(file_path)}"
+                )
+            except IOError as e:
+                return ArchiveResult(
+                    status=ArchiveStatus.FAILURE.value,
+                    message=f"Error writing file: {str(e)}"
+                )
+            except Exception as e:
+                return ArchiveResult(
+                    status=ArchiveStatus.FAILURE.value,
+                    message=f"Unexpected error: {str(e)}"
+                )
         except Exception as e:
             return ArchiveResult(
                 status=ArchiveStatus.FAILURE.value,
-                message=f"Error uploading: {str(e)}"
-            )
-    
-    def sync_to_internet_archive(self, file_name: str) -> ArchiveResult:
-        """Sync a local WARC file to Internet Archive"""
-        try:
-            file_path = os.path.join(self.upload_folder, file_name)
-            item = internetarchive.upload(
-                file_name,
-                files=[file_path],
-                metadata={"title": file_name}
-            )
-            return ArchiveResult(
-                status=ArchiveStatus.SUCCESS.value,
-                message=f"Uploaded to Internet Archive: {item.identifier}"
-            )
-        except Exception as e:
-            return ArchiveResult(
-                status=ArchiveStatus.FAILURE.value,
-                message=f"Error uploading: {str(e)}"
+                message=f"Error processing file: {str(e)}"
             )
 
 def main():
