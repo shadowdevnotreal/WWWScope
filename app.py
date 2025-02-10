@@ -1,256 +1,380 @@
-import random
-import time
+import os
 import streamlit as st
 import requests
-import os
-import boto3
-import internetarchive
+import time
 import concurrent.futures
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
+from dataclasses import dataclass
+from enum import Enum
+from typing import Dict, List, Optional
+import internetarchive
 
-# Check if Selenium is available
-try:
-    from selenium import webdriver
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.chrome.service import Service
-    from webdriver_manager.chrome import ChromeDriverManager
-    from selenium.webdriver.chrome.options import Options
+@dataclass
+class ArchiveResult:
+    status: str
+    message: str
+    details: Optional[str] = None
 
-    SELENIUM_AVAILABLE = True
-except ImportError:
-    SELENIUM_AVAILABLE = False
+class ArchiveStatus(Enum):
+    SUCCESS = "✅"
+    FAILURE = "❌"
+    PENDING = "⏳"
 
-# Archive & Retrieve Endpoints
-ARCHIVE_SITES = {
-    "Wayback Machine": "https://web.archive.org/save/",
-    "Archive.today": "https://archive.today/submit/",
-    "Memento": "http://timetravel.mementoweb.org/api/json/"
-}
-
-# Submit URL to Wayback Machine
-def submit_to_wayback(url):
-    try:
-        # Send request to archive the URL
-        response = requests.post(
-            "https://web.archive.org/save/",
-            data={"url": url},
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=30,
+class SeleniumConfig:
+    def __init__(self):
+        self.is_cloud = self._detect_environment()
+        
+    def _detect_environment(self) -> bool:
+        """Detect if running in Streamlit Cloud"""
+        return 'STREAMLIT_CLOUD' in os.environ
+    
+    def get_chrome_options(self) -> Options:
+        """Get Chrome options based on environment"""
+        options = Options()
+        if self.is_cloud:
+            options.add_argument('--headless')
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
+        return options
+    
+    def get_driver(self) -> webdriver.Chrome:
+        """Initialize Chrome driver based on environment"""
+        options = self.get_chrome_options()
+        return webdriver.Chrome(
+            service=Service(ChromeDriverManager().install()),
+            options=options
         )
 
-        # Check if the archive request was successful
-        if response.ok:
-            # Extract the archive URL
-            archive_url = f"https://web.archive.org/web/*/{url}"
-
-            # Wait a few seconds before checking if it exists
-            time.sleep(5)
-            verify_response = requests.get(archive_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
-
-            # Check if the archive exists
-            if verify_response.ok:
-                return f"✅ Archived Successfully: {archive_url}"
-            else:
-                return "❌ Archive.org claimed success but the archive is missing."
-        else:
-            return "❌ Archive.org failed to archive the URL."
-    except requests.exceptions.RequestException as e:
-        return f"⚠️ Error: {e}"
-
-# Archive.today Mirrors
-ARCHIVE_TODAY_MIRRORS = [
-    "https://archive.today",
-    "https://archive.ph",
-    "https://archive.is",
-    "https://archive.fo"
-]
-
-# Function to submit URL to Archive.today
-def submit_to_archive_today(url):
-    # If Selenium is available, use it
-    if SELENIUM_AVAILABLE:
+class WebArchiver:
+    def __init__(self):
+        self.config = SeleniumConfig()
+        self.driver = None
+        self.services = {
+            "archive": {
+                "Wayback Machine": "https://web.archive.org/save/",
+                "Archive.today": ["https://archive.today", "https://archive.ph"],
+                "Memento": "http://timetravel.mementoweb.org/api/json/"
+            },
+            "retrieve": {
+                "Memento": "http://timetravel.mementoweb.org/api/json/",
+                "Internet Archive": "https://archive.org"
+            }
+        }
+        
+    def initialize_driver(self):
+        """Initialize Selenium driver"""
         try:
-            options = Options()
-            options.add_argument("--headless")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            
-            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-            
-            for mirror in ARCHIVE_TODAY_MIRRORS:
-                try:
-                    driver.get(mirror)
-                    time.sleep(3)
-
-                    input_box = driver.find_element(By.NAME, "url")
-                    input_box.send_keys(url)
-                    input_box.submit()
-
-                    time.sleep(10)  # Allow time for processing
-
-                    archived_url = driver.current_url
-                    driver.quit()
-                    return f"✅ Archived Successfully: {archived_url}"
-                except Exception:
-                    continue  # Try next mirror
-
-            driver.quit()
+            self.driver = self.config.get_driver()
+            return True
         except Exception as e:
-            st.warning(f"Selenium failed: {e}")
-
-    # If Selenium is not available, use Requests instead
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Referer": random.choice(ARCHIVE_TODAY_MIRRORS)
-    }
-
-    for mirror in ARCHIVE_TODAY_MIRRORS:
+            st.error(f"Failed to initialize Selenium: {str(e)}")
+            return False
+    
+    def cleanup(self):
+        """Clean up Selenium resources"""
+        if self.driver:
+            self.driver.quit()
+            self.driver = None
+    
+    def archive_url(self, url: str, service: str) -> ArchiveResult:
+        """Archive a URL using the specified service"""
+        try:
+            if service == "Wayback Machine":
+                return self._wayback_archive(url)
+            elif service == "Archive.today":
+                return self._archive_today(url)
+            elif service == "Memento":
+                return self._memento_archive(url)
+        except Exception as e:
+            return ArchiveResult(
+                status=ArchiveStatus.FAILURE.value,
+                message=f"Error archiving: {str(e)}"
+            )
+    
+    def _wayback_archive(self, url: str) -> ArchiveResult:
+        """Handle Wayback Machine archiving"""
         try:
             response = requests.post(
-                f"{mirror}/submit/",
+                self.services["archive"]["Wayback Machine"],
                 data={"url": url},
-                headers=headers,
-                timeout=40  # Increased timeout
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=30
+            )
+            
+            if response.ok:
+                time.sleep(5)  # Wait for processing
+                archive_url = f"https://web.archive.org/web/*/{url}"
+                verify_response = requests.get(
+                    archive_url,
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=30
+                )
+                
+                if verify_response.ok and "Sorry" not in verify_response.text:
+                    return ArchiveResult(
+                        status=ArchiveStatus.SUCCESS.value,
+                        message=f"Archived Successfully: {archive_url}"
+                    )
+            return ArchiveResult(
+                status=ArchiveStatus.FAILURE.value,
+                message="Archive.org failed to archive"
+            )
+        except Exception as e:
+            return ArchiveResult(
+                status=ArchiveStatus.FAILURE.value,
+                message=f"Error: {str(e)}"
+            )
+    
+    def _archive_today(self, url: str) -> ArchiveResult:
+        """Handle Archive.today archiving"""
+        if not self.services["archive"]["Archive.today"]:
+            return ArchiveResult(
+                status=ArchiveStatus.FAILURE.value,
+                message="No available Archive.today mirrors"
+            )
+        
+        if self.driver:
+            try:
+                options = self.config.get_chrome_options()
+                driver = webdriver.Chrome(
+                    service=Service(ChromeDriverManager().install()),
+                    options=options
+                )
+                
+                for mirror in self.services["archive"]["Archive.today"]:
+                    try:
+                        driver.get(mirror)
+                        time.sleep(3)
+                        
+                        input_box = driver.find_element("name", "url")
+                        input_box.send_keys(url)
+                        input_box.submit()
+                        time.sleep(10)  # Allow processing
+                        
+                        archived_url = driver.current_url
+                        driver.quit()
+                        return ArchiveResult(
+                            status=ArchiveStatus.SUCCESS.value,
+                            message=f"Archived Successfully: {archived_url}"
+                        )
+                    except Exception:
+                        continue  # Try next mirror
+                driver.quit()
+            except Exception as e:
+                st.warning(f"Selenium failed: {e}")
+        
+        # Fallback to Requests if Selenium fails
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                         "(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Referer": self.services["archive"]["Archive.today"][0]
+        }
+        
+        for mirror in self.services["archive"]["Archive.today"]:
+            try:
+                response = requests.post(
+                    f"{mirror}/submit/",
+                    data={"url": url},
+                    headers=headers,
+                    timeout=40
+                )
+                if response.ok:
+                    return ArchiveResult(
+                        status=ArchiveStatus.SUCCESS.value,
+                        message=f"Archived Successfully at {mirror}"
+                    )
+            except Exception:
+                continue  # Try next mirror
+        
+        return ArchiveResult(
+            status=ArchiveStatus.FAILURE.value,
+            message="Archive.today failed on all mirrors"
+        )
+    
+    def _memento_archive(self, url: str) -> ArchiveResult:
+        """Handle Memento archiving"""
+        try:
+            response = requests.get(
+                self.services["archive"]["Memento"],
+                params={"url": url},
+                timeout=10
             )
             if response.ok:
-                return f"✅ Archived Successfully at {mirror}"
-        except requests.exceptions.RequestException:
-            continue  # Try next mirror
+                return ArchiveResult(
+                    status=ArchiveStatus.SUCCESS.value,
+                    message="Archived Successfully",
+                    details=response.json()
+                )
+            return ArchiveResult(
+                status=ArchiveStatus.FAILURE.value,
+                message="Memento archiving failed"
+            )
+        except Exception as e:
+            return ArchiveResult(
+                status=ArchiveStatus.FAILURE.value,
+                message=f"Error: {str(e)}"
+            )
 
-    return "❌ Archive.today failed on all mirrors."
-
-# Streamlit UI
-st.title("🌍 WWWScope – Web Archiving & Retrieval")
-st.write("Archive and retrieve web pages from multiple services.")
-
-# 📌 **Add User Input for URL**
-url = st.text_input("Enter the URL to archive or retrieve:")
-
-# Choose mode
-mode = st.radio("Choose Mode:", ["Archive URL", "Retrieve Archived Versions"])
-
-# Select Services
-services = st.multiselect(
-    "Select Services:",
-    ["Wayback Machine", "Archive.today", "Memento"],
-    default=["Wayback Machine"]
-)
-
-# Button to Archive or Retrieve
-if st.button("Submit"):
-    if not url:
-        st.error("Please enter a valid URL.")
-    else:
-        results = {}
-
-        def process_service(service):
-            if mode == "Archive URL":
-                if service == "Wayback Machine":
-                    return submit_to_wayback(url)
-                elif service == "Archive.today":
-                    return submit_to_archive_today(url)
-            elif mode == "Retrieve Archived Versions":
-                if service == "Wayback Machine":
-                    return f"Check archived versions at: https://web.archive.org/web/*/{url}"
-                elif service == "Archive.today":
-                    return f"Search manually at: https://archive.today/{url}"
-                elif service == "Memento":
-                    return retrieve_memento_links(url)
-
-        # Run services in parallel
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_service = {executor.submit(process_service, s): s for s in services}
-            for future in concurrent.futures.as_completed(future_to_service):
-                service = future_to_service[future]
-                try:
-                    results[service] = future.result()
-                except Exception as e:
-                    results[service] = f"Error: {e}"
-
-        # Display results
-        st.json(results)
-
-# S3 & Internet Archive Configuration (Add to Streamlit Secrets for Security)
-# S3_BUCKET = "your-public-s3-bucket"
-# S3_ACCESS_KEY = st.secrets["S3_ACCESS_KEY"]
-# S3_SECRET_KEY = st.secrets["S3_SECRET_KEY"]
-
-## To run public bucket 
-# import boto3
-# import botocore
-# s3 = boto3.client("s3", config=boto3.session.Config(signature_version=botocore.UNSIGNED))
-# bucket_name = "your-public-bucket-name"
-
-# Example: List public files in the S3 bucket
-# response = s3.list_objects_v2(Bucket=bucket_name)
-# files = [obj["Key"] for obj in response.get("Contents", [])]
-# st.write("Public files in S3 bucket:", files)
-
-# Ensure Upload Directory Exists
-UPLOAD_FOLDER = "local_archives"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-# Configure Selenium WebDriver
-def get_webdriver():
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    service = Service(ChromeDriverManager().install())
-    return webdriver.Chrome(service=service, options=chrome_options)
-
-# Securely Upload WARC to S3
-def upload_warc_to_s3(file_path, file_name):
-    s3 = boto3.client("s3", aws_access_key_id=S3_ACCESS_KEY, aws_secret_access_key=S3_SECRET_KEY)
-    try:
-        s3.upload_file(file_path, S3_BUCKET, file_name, ExtraArgs={'ACL': 'public-read'})
-        return f"https://{S3_BUCKET}.s3.amazonaws.com/{file_name}"
-    except Exception as e:
-        return f"Error uploading to S3: {e}"
-
-# Upload WARC to Internet Archive
-def upload_warc_to_internet_archive(file_path, file_name):
-    try:
-        item = internetarchive.upload(file_name, files=[file_path], metadata={'title': file_name})
-        return f"https://archive.org/details/{file_name}"
-    except Exception as e:
-        return f"Error uploading to Internet Archive: {e}"
-
-# Streamlit UI
-st.title("🌍 Archive Sync & Management")
-st.write("Sync your local WARC archives to public cloud storage.")
-
-# File Upload Section
-uploaded_file = st.file_uploader("Upload WARC File", type=["warc", "warc.gz"])
-if uploaded_file:
-    file_name = uploaded_file.name
-    file_path = os.path.join(UPLOAD_FOLDER, file_name)
-
-    # Save file locally
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-
-    st.success(f"File uploaded and stored at: {file_path}")
-
-# Sync Button to Upload Local Archives to Cloud
-if st.button("🔄 Sync Local Archives to S3 & Internet Archive"):
-    local_files = os.listdir(UPLOAD_FOLDER)
+class WARCManager:
+    def __init__(self):
+        self.upload_folder = "local_archives"
+        os.makedirs(self.upload_folder, exist_ok=True)
+        
+    def upload_warc(self, file: st.uploaded_file_manager.UploadedFile) -> ArchiveResult:
+        """Upload a WARC file to local storage"""
+        try:
+            file_path = os.path.join(self.upload_folder, file.name)
+            with open(file_path, "wb") as f:
+                f.write(file.getbuffer())
+            return ArchiveResult(
+                status=ArchiveStatus.SUCCESS.value,
+                message=f"File uploaded to {file_path}"
+            )
+        except Exception as e:
+            return ArchiveResult(
+                status=ArchiveStatus.FAILURE.value,
+                message=f"Error uploading: {str(e)}"
+            )
     
-    if not local_files:
-        st.warning("No local archives found.")
-    else:
-        results = {}
+    def sync_to_internet_archive(self, file_name: str) -> ArchiveResult:
+        """Sync a local WARC file to Internet Archive"""
+        try:
+            file_path = os.path.join(self.upload_folder, file_name)
+            item = internetarchive.upload(
+                file_name,
+                files=[file_path],
+                metadata={"title": file_name}
+            )
+            return ArchiveResult(
+                status=ArchiveStatus.SUCCESS.value,
+                message=f"Uploaded to Internet Archive: {item.identifier}"
+            )
+        except Exception as e:
+            return ArchiveResult(
+                status=ArchiveStatus.FAILURE.value,
+                message=f"Error uploading: {str(e)}"
+            )
 
-        def sync_file(file_name):
-            file_path = os.path.join(UPLOAD_FOLDER, file_name)
-            s3_url = upload_warc_to_s3(file_path, file_name)
-            ia_url = upload_warc_to_internet_archive(file_path, file_name)
-            return {"s3_url": s3_url, "internet_archive_url": ia_url}
+def main():
+    st.title("🌍 WWWScope – Web Archiving & Retrieval")
+    
+    # Initialize components
+    archiver = WebArchiver()
+    warc_manager = WARCManager()
+    
+    try:
+        if not archiver.initialize_driver():
+            return
+        
+        # Archive & Retrieve Section
+        mode = st.radio("Choose Mode:", ["Archive URL", "Retrieve Archives"])
+        
+        if mode == "Archive URL":
+            url = st.text_input("Enter URL to archive:")
+            services = st.multiselect(
+                "Select Services:",
+                ["Wayback Machine", "Archive.today", "Memento"],
+                default=["Wayback Machine"]
+            )
+            
+            if st.button("Archive"):
+                results = {}
+                
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future_to_service = {
+                        executor.submit(archiver.archive_url, url, service): service
+                        for service in services
+                    }
+                    
+                    for future in concurrent.futures.as_completed(future_to_service):
+                        service = future_to_service[future]
+                        try:
+                            results[service] = future.result()
+                        except Exception as e:
+                            results[service] = ArchiveResult(
+                                status=ArchiveStatus.FAILURE.value,
+                                message=f"Error: {str(e)}"
+                            )
+                
+                for service, result in results.items():
+                    st.write(f"{service}: {result.message}")
+                    if result.details:
+                        st.code(result.details)
+        
+        # Retrieve Section
+        elif mode == "Retrieve Archives":
+            url = st.text_input("Enter URL to retrieve archives for:")
+            services = st.multiselect(
+                "Select Services:",
+                ["Memento", "Internet Archive"],
+                default=["Memento"]
+            )
+            
+            if st.button("Retrieve"):
+                results = {}
+                
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future_to_service = {
+                        executor.submit(archiver.retrieve_archives, url, service): service
+                        for service in services
+                    }
+                    
+                    for future in concurrent.futures.as_completed(future_to_service):
+                        service = future_to_service[future]
+                        try:
+                            results[service] = future.result()
+                        except Exception as e:
+                            results[service] = ArchiveResult(
+                                status=ArchiveStatus.FAILURE.value,
+                                message=f"Error: {str(e)}"
+                            )
+                
+                for service, result in results.items():
+                    st.write(f"{service}: {result.message}")
+                    if result.details:
+                        st.code(result.details)
+        
+        # WARC File Management Section
+        st.header("📂 WARC File Management")
+        
+        # Upload WARC files
+        uploaded_file = st.file_uploader("Upload WARC File", type=["warc", "warc.gz"])
+        if uploaded_file:
+            result = warc_manager.upload_warc(uploaded_file)
+            st.write(result.message)
+        
+        # Sync WARC files to Internet Archive
+        if st.button("🔄 Sync Local Archives to Internet Archive"):
+            local_files = os.listdir(warc_manager.upload_folder)
+            if not local_files:
+                st.warning("No local archives found.")
+            else:
+                results = {}
+                
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future_to_file = {
+                        executor.submit(warc_manager.sync_to_internet_archive, f): f
+                        for f in local_files
+                    }
+                    
+                    for future in concurrent.futures.as_completed(future_to_file):
+                        file_name = future_to_file[future]
+                        try:
+                            results[file_name] = future.result()
+                        except Exception as e:
+                            results[file_name] = ArchiveResult(
+                                status=ArchiveStatus.FAILURE.value,
+                                message=f"Error: {str(e)}"
+                            )
+                
+                for file_name, result in results.items():
+                    st.write(f"{file_name}: {result.message}")
+    
+    finally:
+        archiver.cleanup()
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_file = {executor.submit(sync_file, f): f for f in local_files}
-            for future in concurrent.futures.as_completed(future_to_file):
-                file_name = future_to_file[future]
-                try:
-                    results[file_name] = future.result()
-                except Exception as e:
-                    results[file_name] = f"Error: {e}"
-
-        st.json(results)
+if __name__ == "__main__":
+    main()
