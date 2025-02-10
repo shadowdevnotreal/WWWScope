@@ -1,3 +1,4 @@
+import time
 import streamlit as st
 import requests
 import os
@@ -21,43 +22,68 @@ ARCHIVE_SITES = {
 # Submit URL to Wayback Machine
 def submit_to_wayback(url):
     try:
+        # Send request to archive the URL
         response = requests.post(
             "https://web.archive.org/save/",
             data={"url": url},
             headers={"User-Agent": "Mozilla/5.0"},
-            timeout=20,
+            timeout=30,
         )
+
+        # Check if the archive request was successful
         if response.ok:
-            return f"Archived successfully: {response.url}"
+            # Extract the archive URL
+            archive_url = f"https://web.archive.org/web/*/{url}"
+
+            # Wait a few seconds before checking if it exists
+            time.sleep(5)
+            verify_response = requests.get(archive_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+
+            # Check if the archive exists
+            if verify_response.ok:
+                return f"✅ Archived Successfully: {archive_url}"
+            else:
+                return "❌ Archive.org claimed success but the archive is missing."
         else:
-            return "Wayback Machine failed to archive."
+            return "❌ Archive.org failed to archive the URL."
     except requests.exceptions.RequestException as e:
-        return f"Error: {e}"
+        return f"⚠️ Error: {e}"
 
 # Submit URL to Archive.today
-ARCHIVE_TODAY_MIRRORS = [
-    "https://archive.today",
-    "https://archive.ph",
-    "https://archive.is",
-    "https://archive.fo",
-]
-
 def submit_to_archive_today(url):
-    for mirror in ARCHIVE_TODAY_MIRRORS:
+    archive_today_mirrors = [
+        "https://archive.today",
+        "https://archive.ph",
+        "https://archive.is",
+        "https://archive.fo"
+    ]
+
+    options = Options()
+    options.add_argument("--headless")  # Run in headless mode
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+    for mirror in archive_today_mirrors:
         try:
-            response = requests.post(
-                f"{mirror}/submit/",
-                data={"url": url},
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=30,  # Increased timeout
-            )
-            if response.ok:
-                return f"Archived successfully: {response.url}"
-        except requests.exceptions.RequestException as e:
-            continue  # Try the next mirror
+            driver.get(mirror)
+            time.sleep(3)
 
-    return "Archive.today failed on all mirrors."
+            input_box = driver.find_element(By.NAME, "url")
+            input_box.send_keys(url)
+            input_box.submit()
 
+            time.sleep(10)  # Allow time for processing
+
+            archived_url = driver.current_url
+            driver.quit()
+            return f"✅ Archived Successfully: {archived_url}"
+        except Exception as e:
+            continue  # Try next mirror
+
+    driver.quit()
+    return "❌ Archive.today failed on all mirrors."
 # Retrieve from Memento Web
 def retrieve_memento_links(url):
     try:
