@@ -55,6 +55,68 @@ def submit_to_wayback(url):
     except requests.exceptions.RequestException as e:
         return f"⚠️ Error: {e}"
 
+# Archive.today Mirrors
+ARCHIVE_TODAY_MIRRORS = [
+    "https://archive.today",
+    "https://archive.ph",
+    "https://archive.is",
+    "https://archive.fo"
+]
+
+# Function to submit URL to Archive.today
+def submit_to_archive_today(url):
+    # If Selenium is available, use it
+    if SELENIUM_AVAILABLE:
+        try:
+            options = Options()
+            options.add_argument("--headless")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            
+            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            
+            for mirror in ARCHIVE_TODAY_MIRRORS:
+                try:
+                    driver.get(mirror)
+                    time.sleep(3)
+
+                    input_box = driver.find_element(By.NAME, "url")
+                    input_box.send_keys(url)
+                    input_box.submit()
+
+                    time.sleep(10)  # Allow time for processing
+
+                    archived_url = driver.current_url
+                    driver.quit()
+                    return f"✅ Archived Successfully: {archived_url}"
+                except Exception:
+                    continue  # Try next mirror
+
+            driver.quit()
+        except Exception as e:
+            st.warning(f"Selenium failed: {e}")
+
+    # If Selenium is not available, use Requests instead
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Referer": random.choice(ARCHIVE_TODAY_MIRRORS)
+    }
+
+    for mirror in ARCHIVE_TODAY_MIRRORS:
+        try:
+            response = requests.post(
+                f"{mirror}/submit/",
+                data={"url": url},
+                headers=headers,
+                timeout=40  # Increased timeout
+            )
+            if response.ok:
+                return f"✅ Archived Successfully at {mirror}"
+        except requests.exceptions.RequestException:
+            continue  # Try next mirror
+
+    return "❌ Archive.today failed on all mirrors."
+
 # Streamlit UI
 st.title("🌍 WWWScope – Web Archiving & Retrieval")
 st.write("Archive and retrieve web pages from multiple services.")
