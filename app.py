@@ -242,7 +242,7 @@ class WARCManager:
         self.upload_folder = Path("local_archives")
         self.upload_folder.mkdir(exist_ok=True, parents=True)
         
-    def upload_warc(self, file: st.uploaded_file_manager.UploadedFile) -> ArchiveResult:
+    def upload_warc(self, file: streamlit.uploaded_file_manager.UploadedFile) -> ArchiveResult:
         """Upload a WARC file to local storage"""
         try:
             # Get file properties
