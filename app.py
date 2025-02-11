@@ -168,47 +168,157 @@ def process_service(service: str, url: str, mode: str) -> str:
     except Exception as e:
         return f"Error processing {service}: {str(e)}"
 
-# Streamlit UI
+# ... (keep all the previous imports and functions the same until the Streamlit UI part)
+
+# Streamlit UI with improved interface
 st.title("🌍 WWWScope – Web Archiving & Retrieval")
 st.write("Archive and retrieve web pages from multiple services.")
 
-url = st.text_input("Enter the URL to archive or retrieve:")
-mode = st.radio("Choose Mode:", ["Archive URL", "Retrieve Archived Versions"])
+# URL input with better validation
+url = st.text_input("Enter the URL to archive or retrieve:", 
+                    placeholder="https://example.com")
 
-services = st.multiselect(
-    "Select Services:",
-    ["Wayback Machine", "Archive.today", "Memento"],
-    default=["Wayback Machine"]
-)
-
-if st.button("Submit"):
+# Improved URL validation
+def is_valid_url(url: str) -> bool:
+    """More lenient URL validation."""
     if not url:
-        st.error("Please enter a valid URL.")
-    else:
-        if not validate_url(url):
-            st.error("Please enter a valid URL starting with http:// or https://")
+        return False
+    
+    # Add http:// if missing
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+    
+    try:
+        response = requests.head(url, timeout=5, allow_redirects=True)
+        return True
+    except:
+        return False
+
+# Create tabs for different modes
+tab1, tab2 = st.tabs(["📥 Archive URL", "🔍 Retrieve Archives"])
+
+with tab1:
+    st.header("Archive URL")
+    
+    # Service selection using a more visual approach
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        wayback = st.checkbox("Wayback Machine", value=True,
+                            help="Internet Archive's Wayback Machine - Most reliable")
+    with col2:
+        archive_today = st.checkbox("Archive.today", 
+                                  help="Good for dynamic content and paywalled sites")
+    with col3:
+        memento = st.checkbox("Memento", 
+                            help="Aggregates multiple archive services")
+
+    selected_services = []
+    if wayback:
+        selected_services.append("Wayback Machine")
+    if archive_today:
+        selected_services.append("Archive.today")
+    if memento:
+        selected_services.append("Memento")
+
+    if st.button("🚀 Archive Now", use_container_width=True):
+        if not url:
+            st.error("Please enter a URL")
         else:
-            results = {}
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+            # Add http:// if missing
+            if not url.startswith(('http://', 'https://')):
+                url = 'https://' + url
+            
+            if not is_valid_url(url):
+                st.error("Unable to access the URL. Please check if it's correct and accessible.")
+            else:
+                if not selected_services:
+                    st.warning("Please select at least one archive service")
+                else:
+                    results = {}
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
 
-            with st.spinner("Processing requests..."):
-                with concurrent.futures.ThreadPoolExecutor(max_workers=len(services)) as executor:
-                    future_to_service = {
-                        executor.submit(process_service, service, url, mode): service 
-                        for service in services
-                    }
+                    with st.spinner("Archiving in progress..."):
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=len(selected_services)) as executor:
+                            future_to_service = {
+                                executor.submit(process_service, service, url, "Archive URL"): service 
+                                for service in selected_services
+                            }
+                            
+                            for idx, future in enumerate(concurrent.futures.as_completed(future_to_service)):
+                                service = future_to_service[future]
+                                status_text.text(f"Processing {service}...")
+                                progress_bar.progress((idx + 1) / len(selected_services))
+                                
+                                try:
+                                    results[service] = future.result()
+                                except Exception as e:
+                                    results[service] = f"Failed: {str(e)}"
+
+                    status_text.empty()
+                    progress_bar.empty()
                     
-                    for idx, future in enumerate(concurrent.futures.as_completed(future_to_service)):
-                        service = future_to_service[future]
-                        status_text.text(f"Processing {service}...")
-                        progress_bar.progress((idx + 1) / len(services))
-                        
-                        try:
-                            results[service] = future.result()
-                        except Exception as e:
-                            results[service] = f"Failed: {str(e)}"
+                    # Display results in a more attractive way
+                    for service, result in results.items():
+                        with st.expander(f"{service} Result", expanded=True):
+                            if "✅" in str(result):
+                                st.success(result)
+                            elif "❌" in str(result):
+                                st.error(result)
+                            else:
+                                st.info(result)
 
-            status_text.empty()
-            progress_bar.empty()
-            st.json(results)
+with tab2:
+    st.header("Retrieve Archives")
+    
+    # Add radio buttons for specific archive services
+    retrieve_service = st.radio(
+        "Choose archive service to search:",
+        ["All Services", "Wayback Machine Only", "Archive.today Only", "Memento Only"],
+        horizontal=True
+    )
+    
+    if st.button("🔍 Search Archives", use_container_width=True):
+        if not url:
+            st.error("Please enter a URL")
+        else:
+            # Add http:// if missing
+            if not url.startswith(('http://', 'https://')):
+                url = 'https://' + url
+                
+            services_to_check = []
+            if retrieve_service == "All Services":
+                services_to_check = ["Wayback Machine", "Archive.today", "Memento"]
+            elif retrieve_service == "Wayback Machine Only":
+                services_to_check = ["Wayback Machine"]
+            elif retrieve_service == "Archive.today Only":
+                services_to_check = ["Archive.today"]
+            elif retrieve_service == "Memento Only":
+                services_to_check = ["Memento"]
+
+            results = {}
+            with st.spinner("Searching archives..."):
+                for service in services_to_check:
+                    results[service] = process_service(service, url, "Retrieve Archived Versions")
+
+            # Display results in a more attractive way
+            for service, result in results.items():
+                with st.expander(f"{service} Archives", expanded=True):
+                    if isinstance(result, dict):
+                        st.json(result)
+                    else:
+                        st.write(result)
+                        if "web.archive.org" in str(result):
+                            st.link_button("Open in Wayback Machine", str(result))
+                        elif "archive.today" in str(result):
+                            st.link_button("Open in Archive.today", str(result))
+
+# Add footer
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center'>
+    <p>Made with ❤️ for web preservation | 
+    <a href="https://github.com/yourusername/wwwscope" target="_blank">GitHub</a></p>
+</div>
+""", unsafe_allow_html=True)
