@@ -64,6 +64,22 @@ def test_secrets_and_api():
                 st.error(f"❌ Connection failed: {str(e)}")
                 st.info("Please verify your Internet Archive credentials")
 
+def test_storage():
+    with st.sidebar:
+        st.markdown("#### 🧪 Storage Test")
+        if st.button("Test Storage Access"):
+            try:
+                # Try to create a test file
+                test_file = WARC_DIR / "test.txt"
+                test_file.write_text("Storage test")
+                st.success("✅ Storage test successful")
+                # Cleanup
+                test_file.unlink()
+            except Exception as e:
+                st.error(f"❌ Storage test failed: {str(e)}")
+
+
+
 def test_upload():
     with st.sidebar:
         st.markdown("#### 🧪 Upload Test")
@@ -105,9 +121,11 @@ software: WWWScope Test""")
                     test_warc_path.unlink()
                     st.info("Test file cleaned up")
 
-# Call both test functions after they're defined
+# Update your test section
 if __name__ == "__main__":
     test_secrets_and_api()
+    test_storage()
+    check_storage_status()
     test_upload()
 
 
@@ -142,8 +160,30 @@ ARCHIVE_SITES = {
 }
 
 # Create necessary directories if they don't exist
-WARC_DIR = Path("local_archives")
+import tempfile
+from pathlib import Path
+
+# Create a temporary directory for the session
+TEMP_DIR = Path(tempfile.gettempdir())
+WARC_DIR = TEMP_DIR / "local_archives"
 WARC_DIR.mkdir(exist_ok=True)
+
+def check_storage_status():
+    with st.sidebar:
+        st.markdown("#### 📂 Storage Status")
+        st.info(f"Temporary storage path: {WARC_DIR}")
+        
+        # Check if directory exists and is writable
+        if WARC_DIR.exists():
+            st.success("✅ Storage directory ready")
+            # List any existing files
+            files = list(WARC_DIR.glob("*.warc*"))
+            if files:
+                st.write("Current files:", len(files))
+            else:
+                st.write("No files currently stored")
+        else:
+            st.error("❌ Storage directory not available")
 
 def save_warc_file(uploaded_file) -> bool:
     """Save uploaded WARC file locally."""
