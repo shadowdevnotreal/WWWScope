@@ -318,7 +318,7 @@ with tab2:
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center'>
-    <p>Made with ❤️ for web preservation | 
-    <a href="https://github.com/yourusername/wwwscope" target="_blank">GitHub</a></p>
+    <p>Made with ❤️ for web preservation 🫡😼 |
+    <a href="https://github.com/shadowdevnotreal/wwwscope" target="_blank">GitHub</a></p>
 </div>
 """, unsafe_allow_html=True)
