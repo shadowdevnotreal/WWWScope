@@ -14,6 +14,53 @@ from pathlib import Path
 import internetarchive
 
 
+# Add this under your test_secrets_and_api() function
+def test_upload():
+    with st.sidebar:
+        st.markdown("#### 🧪 Upload Test")
+        if st.button("Create & Upload Test WARC"):
+            # Create a test WARC file
+            test_warc_path = WARC_DIR / "test.warc"
+            try:
+                # Create a simple WARC file
+                with open(test_warc_path, 'w') as f:
+                    f.write("""WARC/1.0
+WARC-Type: warcinfo
+WARC-Date: 2024-02-11T12:00:00Z
+WARC-Record-ID: <urn:uuid:test>
+Content-Type: application/warc-fields
+Content-Length: 23
+
+software: WWWScope Test""")
+                
+                st.success("✅ Test WARC file created")
+                
+                # Try uploading
+                with st.spinner("Uploading to Internet Archive..."):
+                    result = upload_to_internet_archive(test_warc_path)
+                    st.write(result)
+                    
+                    if "✅" in result:
+                        st.success("Full upload test successful!")
+                        # Extract and show the URL
+                        url = result.split(": ")[-1]
+                        st.markdown(f"[View on Internet Archive]({url})")
+                    else:
+                        st.error("Upload test failed")
+                        
+            except Exception as e:
+                st.error(f"Test failed: {str(e)}")
+            finally:
+                # Cleanup
+                if test_warc_path.exists():
+                    test_warc_path.unlink()
+                    st.info("Test file cleaned up")
+
+# Call both test functions
+test_secrets_and_api()
+test_upload()
+
+
 # Check if Selenium is available
 try:
     from selenium import webdriver
