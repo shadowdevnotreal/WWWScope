@@ -169,49 +169,46 @@ def process_service(service: str, url: str, mode: str) -> str:
         return f"Error processing {service}: {str(e)}"
 
 # Streamlit UI
-def main():
-    st.title("🌍 WWWScope – Web Archiving & Retrieval")
-    st.write("Archive and retrieve web pages from multiple services.")
+st.title("🌍 WWWScope – Web Archiving & Retrieval")
+st.write("Archive and retrieve web pages from multiple services.")
 
-    url = st.text_input("Enter the URL to archive or retrieve:")
-    mode = st.radio("Choose Mode:", ["Archive URL", "Retrieve Archived Versions"])
+url = st.text_input("Enter the URL to archive or retrieve:")
+mode = st.radio("Choose Mode:", ["Archive URL", "Retrieve Archived Versions"])
 
-    services = st.multiselect(
-        "Select Services:",
-        ["Wayback Machine", "Archive.today", "Memento"],
-        default=["Wayback Machine"]
-    )
+services = st.multiselect(
+    "Select Services:",
+    ["Wayback Machine", "Archive.today", "Memento"],
+    default=["Wayback Machine"]
+)
 
-    if st.button("Submit"):
-        if not url:
-            st.error("Please enter a valid URL.")
-            return
-            
+if st.button("Submit"):
+    if not url:
+        st.error("Please enter a valid URL.")
+    else:
         if not validate_url(url):
             st.error("Please enter a valid URL starting with http:// or https://")
-            return
+        else:
+            results = {}
+            progress_bar = st.progress(0)
+            status_text = st.empty()
 
-        results = {}
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-
-        with st.spinner("Processing requests..."):
-            with concurrent.futures.ThreadPoolExecutor(max_workers=len(services)) as executor:
-                future_to_service = {
-                    executor.submit(process_service, service, url, mode): service 
-                    for service in services
-                }
-                
-                for idx, future in enumerate(concurrent.futures.as_completed(future_to_service)):
-                    service = future_to_service[future]
-                    status_text.text(f"Processing {service}...")
-                    progress_bar.progress((idx + 1) / len(services))
+            with st.spinner("Processing requests..."):
+                with concurrent.futures.ThreadPoolExecutor(max_workers=len(services)) as executor:
+                    future_to_service = {
+                        executor.submit(process_service, service, url, mode): service 
+                        for service in services
+                    }
                     
-                    try:
-                        results[service] = future.result()
-                    except Exception as e:
-                        results[service] = f"Failed: {str(e)}"
+                    for idx, future in enumerate(concurrent.futures.as_completed(future_to_service)):
+                        service = future_to_service[future]
+                        status_text.text(f"Processing {service}...")
+                        progress_bar.progress((idx + 1) / len(services))
+                        
+                        try:
+                            results[service] = future.result()
+                        except Exception as e:
+                            results[service] = f"Failed: {str(e)}"
 
-        status_text.empty()
-        progress_bar.empty()
-        st.json(results)
+            status_text.empty()
+            progress_bar.empty()
+            st.json(results)
