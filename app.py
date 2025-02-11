@@ -81,11 +81,11 @@ def list_local_warcs() -> list:
     return list(WARC_DIR.glob("*.warc*"))
 
 def get_warc_info(file_path: Path) -> dict:
-    """Get information about a WARC file."""
     return {
         "name": file_path.name,
         "size": f"{file_path.stat().st_size / 1024 / 1024:.2f} MB",
         "modified": datetime.fromtimestamp(file_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+    }
       
 
 # Utility functions
@@ -228,7 +228,6 @@ def submit_to_wayback(url: str) -> str:
         
 
 def submit_to_archive_today(url: str) -> str:
-    """Submit URL to Archive.today with improved CAPTCHA handling."""
     message = """
     ⚠️ Archive.today CAPTCHA Notice:
     
@@ -240,6 +239,11 @@ def submit_to_archive_today(url: str) -> str:
     Status: Attempting archive...
     """
     st.info(message)
+    
+    # Remove 'result +' from return statements
+    return f"✅ Archived Successfully: {archived_url}"
+    return f"✅ Archived Successfully at {mirror}"
+    return "❌ Archive.today failed on all mirrors."
     
     if SELENIUM_AVAILABLE:
         driver = get_selenium_driver()
@@ -485,13 +489,7 @@ with tab3:
     
     if st.button("Compare Archives", use_container_width=True):
         if url1 and url2:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("### Version 1")
-                st.components.iframe(url1, height=600)
-            with col2:
-                st.markdown("### Version 2")
-                st.components.iframe(url2, height=600)
+            compare_archives(url1, url2)
         else:
             st.warning("Please enter both archive URLs to compare")
 
