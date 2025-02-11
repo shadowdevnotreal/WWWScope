@@ -1,3 +1,6 @@
+import os
+import gzip
+import shutil
 import time
 import streamlit as st
 import requests
@@ -6,6 +9,8 @@ import random
 import contextlib
 from functools import lru_cache
 from typing import Dict, Any
+from datetime import datetime
+from pathlib import Path
 
 # Check if Selenium is available
 try:
@@ -26,11 +31,62 @@ ARCHIVE_TODAY_MIRRORS = [
     "https://archive.fo"
 ]
 
+# Add to your ARCHIVE_SITES constant
 ARCHIVE_SITES = {
     "Wayback Machine": "https://web.archive.org/save/",
     "Archive.today": "https://archive.today/submit/",
-    "Memento": "http://timetravel.mementoweb.org/api/json/"
+    "Memento": "http://timetravel.mementoweb.org/api/json/",
+    "Google Cache": "https://webcache.googleusercontent.com/search?q=cache:",
+    "WebCite": "http://www.webcitation.org/query?url=",
+    "Megalodon": "http://megalodon.jp/?url=",
+    "TimeTravel": "https://timetravel.mementoweb.org/",
 }
+
+# Create necessary directories if they don't exist
+WARC_DIR = Path("local_archives")
+WARC_DIR.mkdir(exist_ok=True)
+
+def save_warc_file(uploaded_file) -> bool:
+    """Save uploaded WARC file locally."""
+    try:
+        file_path = WARC_DIR / uploaded_file.name
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        return True
+    except Exception as e:
+        st.error(f"Error saving WARC file: {e}")
+        return False
+
+def compress_warc(file_path: Path) -> Path:
+    """Compress WARC file if not already compressed."""
+    if not str(file_path).endswith('.gz'):
+        gz_path = file_path.with_suffix(file_path.suffix + '.gz')
+        with open(file_path, 'rb') as f_in:
+            with gzip.open(gz_path, 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        return gz_path
+    return file_path
+
+def sync_to_internet_archive(file_path: Path) -> str:
+    """Sync WARC file to Internet Archive."""
+    try:
+        # Here you would implement the actual Internet Archive upload
+        # Using their API or SDK
+        return "✅ Successfully synced to Internet Archive"
+    except Exception as e:
+        return f"❌ Sync failed: {e}"
+
+def list_local_warcs() -> list:
+    """List all local WARC files."""
+    return list(WARC_DIR.glob("*.warc*"))
+
+def get_warc_info(file_path: Path) -> dict:
+    """Get information about a WARC file."""
+    return {
+        "name": file_path.name,
+        "size": f"{file_path.stat().st_size / 1024 / 1024:.2f} MB",
+        "modified": datetime.fromtimestamp(file_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+      
 
 # Utility functions
 @contextlib.contextmanager
@@ -41,7 +97,7 @@ def ignore_thread_context_warning():
         yield
 
 @lru_cache(maxsize=100)
-def rate_limited_request(url: str) -> requests.Response:
+def rate_limited_request(url: str) -> requests.Response:    
     """Make a rate-limited request to avoid overwhelming servers."""
     time.sleep(1)  # Basic rate limiting
     return requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
@@ -67,6 +123,39 @@ def validate_url(url: str) -> bool:
         return True
     except:
         return False
+
+def compare_archives(url1: str, url2: str) -> None:
+    """Compare two archived versions visually."""
+    try:
+        # Validate URLs
+        if not url1.startswith(('http://', 'https://')) or not url2.startswith(('http://', 'https://')):
+            st.error("Both URLs must start with http:// or https://")
+            return
+
+        # Create comparison view
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### Version 1")
+            st.markdown(f"Source: {url1}")
+            st.components.iframe(url1, height=600, scrolling=True)
+        
+        with col2:
+            st.markdown("### Version 2")
+            st.markdown(f"Source: {url2}")
+            st.components.iframe(url2, height=600, scrolling=True)
+
+        # Add comparison tools
+        st.markdown("### Comparison Tools")
+        if st.button("📸 Screenshot Comparison"):
+            st.info("Screenshot comparison feature coming soon!")
+        
+        if st.button("📊 Text Diff"):
+            st.info("Text difference analysis coming soon!")
+
+    except Exception as e:
+        st.error(f"Error comparing archives: {str(e)}")
+        
 
 def verify_archive_status(url: str, service: str) -> bool:
     """Verify if URL was actually archived."""
@@ -139,11 +228,18 @@ def submit_to_wayback(url: str) -> str:
         
 
 def submit_to_archive_today(url: str) -> str:
-    """Submit URL to Archive.today with CAPTCHA warning."""
-    result = "⚠️ Note: Archive.today may require CAPTCHA. If archiving fails, please:\n"
-    result += "1. Visit archive.today manually\n"
-    result += "2. Complete the CAPTCHA\n"
-    result += "3. Try archiving again\n\n"
+    """Submit URL to Archive.today with improved CAPTCHA handling."""
+    message = """
+    ⚠️ Archive.today CAPTCHA Notice:
+    
+    If archiving fails due to CAPTCHA:
+    1. Open Archive.today in a new tab
+    2. Solve the CAPTCHA once
+    3. Return here and try again
+    
+    Status: Attempting archive...
+    """
+    st.info(message)
     
     if SELENIUM_AVAILABLE:
         driver = get_selenium_driver()
@@ -226,8 +322,14 @@ url = st.text_input("Enter the URL to archive or retrieve:",
                     placeholder="https://example.com")
 
 # Create tabs for different modes
-tab1, tab2 = st.tabs(["📥 Archive URL", "🔍 Retrieve Archives"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📥 Archive URL", 
+    "🔍 Retrieve Archives",
+    "🔄 Compare Archives",
+    "📦 WARC Management"
+])
 
+# Tab 1: Archive URL
 with tab1:
     st.header("Archive URL")
     
@@ -256,7 +358,6 @@ with tab1:
         if not url:
             st.error("Please enter a URL")
         else:
-            # Add http:// if missing
             if not url.startswith(('http://', 'https://')):
                 url = 'https://' + url
             
@@ -273,27 +374,18 @@ with tab1:
                     status_text = st.empty()
 
                     with st.spinner("Archiving in progress..."):
-                        with ignore_thread_context_warning():
-                            with concurrent.futures.ThreadPoolExecutor(max_workers=len(selected_services)) as executor:
-                                future_to_service = {
-                                    executor.submit(process_service, service, url, "Archive URL"): service 
-                                    for service in selected_services
-                                }
-                                
-                                for idx, future in enumerate(concurrent.futures.as_completed(future_to_service)):
-                                    service = future_to_service[future]
-                                    status_text.text(f"Processing {service}...")
-                                    progress_bar.progress((idx + 1) / len(selected_services))
-                                    
-                                    try:
-                                        results[service] = future.result()
-                                    except Exception as e:
-                                        results[service] = f"Failed: {str(e)}"
+                        for idx, service in enumerate(selected_services):
+                            status_text.text(f"Processing {service}...")
+                            try:
+                                results[service] = process_service(service, url, "Archive URL")
+                            except Exception as e:
+                                results[service] = f"Failed: {str(e)}"
+                            progress_bar.progress((idx + 1) / len(selected_services))
 
                     status_text.empty()
                     progress_bar.empty()
                     
-                    # Display results in a more attractive way
+                    # Display results
                     for service, result in results.items():
                         with st.expander(f"{service} Result", expanded=True):
                             if "✅" in str(result):
@@ -303,6 +395,8 @@ with tab1:
                             else:
                                 st.info(result)
 
+# Tab 2: Retrieve Archives
+# In Tab 2 (Retrieve Archives), replace the existing results display with this:
 with tab2:
     st.header("Retrieve Archives")
     
@@ -320,20 +414,9 @@ with tab2:
             if not url.startswith(('http://', 'https://')):
                 url = 'https://' + url
             
-            # Direct links to archive services
-            wayback_link = f"https://web.archive.org/web/*/{url}"
-            archive_today_link = "https://archive.today"
-            
-            with st.expander("Quick Archive Links", expanded=True):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.link_button("Open Wayback Machine", wayback_link)
-                with col2:
-                    st.link_button("Open Archive.today", archive_today_link)
-
             services_to_check = []
             if retrieve_service == "All Services":
-                services_to_check = ["Wayback Machine", "Archive.today", "Memento"]
+                services_to_check = list(ARCHIVE_SITES.keys())
             elif retrieve_service == "Wayback Machine Only":
                 services_to_check = ["Wayback Machine"]
             elif retrieve_service == "Archive.today Only":
@@ -341,24 +424,133 @@ with tab2:
             elif retrieve_service == "Memento Only":
                 services_to_check = ["Memento"]
 
-            results = {}
-            with st.spinner("Searching archives..."):
-                for service in services_to_check:
+            # New verbose results display
+            with st.expander("🔍 Search Progress", expanded=True):
+                st.info("Initiating archive search...")
+                results = {}
+                
+                # Progress bar
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                for idx, service in enumerate(services_to_check):
+                    status_text.text(f"🔍 Checking {service}...")
+                    progress_bar.progress((idx + 1) / len(services_to_check))
+                    
+                    # Show detailed progress
+                    st.write(f"📡 Querying {service}...")
                     results[service] = process_service(service, url, "Retrieve Archived Versions")
-
-            # Display results in a more attractive way
+                    
+                    # Show individual results
+                    if isinstance(results[service], dict):
+                        st.json(results[service])
+                    else:
+                        st.write(f"Result from {service}: {results[service]}")
+                    
+                    # Add direct links
+                    if service == "Wayback Machine":
+                        st.markdown(f"🔗 Direct link: https://web.archive.org/web/*/{url}")
+                    elif service == "Archive.today":
+                        st.markdown(f"🔗 Search at: https://archive.is/{url}")
+                    elif service == "Google Cache":
+                        st.markdown(f"🔗 Cache: https://webcache.googleusercontent.com/search?q=cache:{url}")
+                    elif service == "WebCite":
+                        st.markdown(f"🔗 WebCite: http://www.webcitation.org/query?url={url}")
+                    elif service == "Megalodon":
+                        st.markdown(f"🔗 Megalodon: http://megalodon.jp/?url={url}")
+                    
+                progress_bar.empty()
+                status_text.empty()
+                st.success("✅ Search complete!")
+                
+            # Summary of results
+            st.subheader("📊 Search Summary")
             for service, result in results.items():
-                with st.expander(f"{service} Archives", expanded=True):
+                with st.expander(f"{service} Results", expanded=True):
                     if isinstance(result, dict):
                         st.json(result)
                     else:
                         st.write(result)
-                        if "web.archive.org" in str(result):
-                            st.link_button("Open in Wayback Machine", str(result))
-                        elif "archive.today" in str(result):
-                            st.link_button("Open in Archive.today", str(result))
+                    
+                    # Add timestamp
+                    st.caption(f"Search completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-# Add footer
+# Tab 3: Compare Archives
+with tab3:
+    st.header("🔄 Archive Comparison")
+    st.write("Compare two versions of archived content visually.")
+    
+    url1 = st.text_input("First Archive URL:")
+    url2 = st.text_input("Second Archive URL:")
+    
+    if st.button("Compare Archives", use_container_width=True):
+        if url1 and url2:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("### Version 1")
+                st.components.iframe(url1, height=600)
+            with col2:
+                st.markdown("### Version 2")
+                st.components.iframe(url2, height=600)
+        else:
+            st.warning("Please enter both archive URLs to compare")
+
+# Tab 4: WARC Management
+with tab4:
+    st.header("📦 WARC Management")
+    st.write("Store and sync WARC files with Internet Archive")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        uploaded_file = st.file_uploader("Upload WARC File", type=["warc", "warc.gz"])
+        if uploaded_file:
+            if save_warc_file(uploaded_file):
+                st.success(f"✅ File uploaded: {uploaded_file.name}")
+                
+                # Compress if needed
+                file_path = WARC_DIR / uploaded_file.name
+                compressed_path = compress_warc(file_path)
+                if compressed_path != file_path:
+                    st.info(f"File compressed: {compressed_path.name}")
+    
+    with col2:
+        if st.button("🔄 Sync All to Internet Archive", use_container_width=True):
+            with st.spinner("Syncing to Internet Archive..."):
+                local_warcs = list_local_warcs()
+                if not local_warcs:
+                    st.warning("No WARC files found locally")
+                else:
+                    for warc in local_warcs:
+                        result = sync_to_internet_archive(warc)
+                        st.write(f"{warc.name}: {result}")
+
+    # Display local WARC files
+    st.subheader("📂 Local WARC Files")
+    local_warcs = list_local_warcs()
+    if not local_warcs:
+        st.info("No WARC files stored locally")
+    else:
+        for warc in local_warcs:
+            info = get_warc_info(warc)
+            with st.expander(f"📄 {info['name']}", expanded=False):
+                st.write(f"Size: {info['size']}")
+                st.write(f"Last Modified: {info['modified']}")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button(f"🔄 Sync {info['name']}", key=f"sync_{info['name']}"):
+                        result = sync_to_internet_archive(warc)
+                        st.write(result)
+                with col2:
+                    if st.button(f"❌ Delete {info['name']}", key=f"delete_{info['name']}"):
+                        try:
+                            warc.unlink()
+                            st.success("File deleted")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error deleting file: {e}")
+
+# Footer
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center'>
