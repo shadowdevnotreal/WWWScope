@@ -6,3 +6,5 @@ webdriver-manager
 internetarchive
 internetarchive==3.5.0
 warcio==1.7.4
+beautifulsoup4==4.9.3
+urllib3==1.26.7
