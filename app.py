@@ -13,6 +13,46 @@ from datetime import datetime
 from pathlib import Path
 import internetarchive
 
+# Add this near the top of your app, after your imports
+# Temporary test section
+st.sidebar.markdown("### Secret Test")
+try:
+    # Test access to secrets
+    access_key = st.secrets["ia_access_key"]
+    secret_key = st.secrets["ia_secret_key"]
+    
+    # Show first few characters of keys (safely)
+    st.sidebar.success("✅ Secrets loaded successfully!")
+    st.sidebar.write(f"Access Key starts with: {access_key[:4]}...")
+    st.sidebar.write(f"Secret Key starts with: {secret_key[:4]}...")
+except Exception as e:
+    st.sidebar.error(f"❌ Error accessing secrets: {str(e)}")
+
+# Add a function to test Internet Archive connection
+def test_ia_connection():
+    try:
+        import internetarchive
+        config = dict(
+            s3=dict(
+                access=st.secrets["ia_access_key"],
+                secret=st.secrets["ia_secret_key"]
+            )
+        )
+        # Test authentication
+        ia = internetarchive.get_session(config=config)
+        user_info = ia.get_user_info()
+        return True, user_info.get('screenname', 'Unknown')
+    except Exception as e:
+        return False, str(e)
+
+# Add this to your sidebar
+if st.sidebar.button("Test IA Connection"):
+    success, result = test_ia_connection()
+    if success:
+        st.sidebar.success(f"✅ Connected as: {result}")
+    else:
+        st.sidebar.error(f"❌ Connection failed: {result}")
+
 # Check if Selenium is available
 try:
     from selenium import webdriver
