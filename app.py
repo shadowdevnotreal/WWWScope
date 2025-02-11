@@ -1,6 +1,9 @@
 import os
 import gzip
+import json
 import shutil
+import urllib3
+import hashlib
 import time
 import streamlit as st
 import requests
@@ -12,7 +15,14 @@ from typing import Dict, Any
 from datetime import datetime
 from pathlib import Path
 import internetarchive
-
+from datetime import datetime
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin, urlparse
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+from api import app as api_app
+import threading
 
 # Check if Selenium is available
 try:
@@ -24,6 +34,122 @@ try:
     SELENIUM_AVAILABLE = True
 except ImportError:
     SELENIUM_AVAILABLE = False
+
+# Add CORS middleware to API
+api_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify actual origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+def run_api():
+    """Run the FastAPI server"""
+    uvicorn.run(api_app, host="0.0.0.0", port=8000)
+
+def main():
+    # Start API server in a separate thread
+    api_thread = threading.Thread(target=run_api, daemon=True)
+    api_thread.start()
+
+
+def create_warc_record(url: str, response: requests.Response, date: str) -> str:
+    """Create a WARC record from a web page response"""
+    warc_version = "WARC/1.0"
+    warc_id = f"<urn:uuid:{hashlib.sha1(url.encode()).hexdigest()}>"
+    
+    # Response headers
+    headers = "\r\n".join([f"{k}: {v}" for k, v in response.headers.items()])
+    content = response.content.decode('utf-8', errors='ignore')
+    
+    # Create WARC record
+    warc_record = f"""\
+{warc_version}
+WARC-Type: response
+WARC-Date: {date}
+WARC-Record-ID: {warc_id}
+WARC-Target-URI: {url}
+Content-Type: application/http; msgtype=response
+Content-Length: {len(content)}
+
+HTTP/1.1 {response.status_code} {response.reason}
+{headers}
+
+{content}
+
+"""
+    return warc_record
+
+def archive_page(url: str) -> Path:
+    """Archive a single web page and create a WARC file"""
+    try:
+        # Make request
+        response = requests.get(url, headers={'User-Agent': 'WWWScope Archiver/1.0'})
+        response.raise_for_status()
+        
+        # Create timestamp
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        
+        # Create WARC record
+        warc_content = create_warc_record(
+            url=url,
+            response=response,
+            date=datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        )
+        
+        # Save WARC file
+        domain = urlparse(url).netloc
+        warc_filename = f"{domain}_{timestamp}.warc"
+        warc_path = WARC_DIR / warc_filename
+        
+        with open(warc_path, 'w', encoding='utf-8') as f:
+            f.write(warc_content)
+        
+        # Compress the WARC file
+        compressed_path = compress_warc(warc_path)
+        
+        return compressed_path
+    
+    except Exception as e:
+        raise Exception(f"Failed to archive page: {str(e)}")
+
+
+# WARC Viewer functionality
+import warcio
+from warcio.archiveiterator import ArchiveIterator
+import streamlit.components.v1 as components
+
+def view_warc_content(warc_file: Path):
+    """Display WARC file content in a viewer"""
+    st.markdown("### 📄 WARC Content Viewer")
+    
+    try:
+        with open(warc_file, 'rb') as stream:
+            for record in ArchiveIterator(stream):
+                if record.rec_type == 'response':
+                    # Get content
+                    content = record.content_stream().read().decode('utf-8', errors='ignore')
+                    headers = record.http_headers
+                    url = record.rec_headers.get_header('WARC-Target-URI')
+                    
+                    # Display in expandable section
+                    with st.expander(f"🔗 {url}", expanded=False):
+                        st.markdown("#### Headers:")
+                        st.code(str(headers))
+                        st.markdown("#### Content:")
+                        # Create iframe for HTML content
+                        components.html(content, height=600, scrolling=True)
+                        
+                        # Add download button for this page
+                        st.download_button(
+                            "💾 Download Page Content",
+                            content,
+                            file_name=f"page_{url.split('/')[-1]}.html",
+                            mime="text/html"
+                        )
+    except Exception as e:
+        st.error(f"Error reading WARC file: {str(e)}")
 
 # Constants
 ARCHIVE_TODAY_MIRRORS = [
@@ -39,9 +165,12 @@ ARCHIVE_SITES = {
     "Archive.today": "https://archive.today/submit/",
     "Memento": "http://timetravel.mementoweb.org/api/json/",
     "Google Cache": "https://webcache.googleusercontent.com/search?q=cache:",
-    "WebCite": "http://www.webcitation.org/query?url=",
-    "Megalodon": "http://megalodon.jp/?url=",
+    "WebCite": "http://www.webcitation.org/archive/",
+    "Megalodon": "http://megalodon.jp/",
+    "Archive.is": "https://archive.is/",
     "TimeTravel": "https://timetravel.mementoweb.org/",
+    "Perma.cc": "https://perma.cc/",
+    "WebCite": "http://www.webcitation.org/"
 }
 
 # Create necessary directories if they don't exist
@@ -119,16 +248,24 @@ def upload_to_internet_archive(file_path: Path) -> str:
         # Create unique identifier
         identifier = f"wwwscope_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        # Updated metadata
-        metadata = dict(
-            title=f"WWWScope Archive: {file_path.name}",
-            mediatype="web",
-            collection="opensource",  # Changed to opensource collection
-            creator="WWWScope",
-            date=datetime.now().strftime("%Y-%m-%d"),
-            subject="web archive",
-            description="Web archive created using WWWScope"
-        )
+        def get_enhanced_metadata(file_path: Path, url: str = None) -> dict:
+    """Get enhanced metadata for Internet Archive upload"""
+    return {
+        "title": f"WWWScope Web Archive: {file_path.name}",
+        "mediatype": "web",
+        "collection": "opensource",
+        "creator": "WWWScope Web Archiving Tool",
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "subject": ["web archive", "digital preservation", "wwwscope"],
+        "description": f"""Web archive created using WWWScope.
+        File: {file_path.name}
+        URL: {url if url else 'Not specified'}
+        Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        Tool: WWWScope + ReplayWeb
+        """,
+        "notes": "Created with WWWScope - Open Source Web Archiving Tool",
+        "license": "http://creativecommons.org/publicdomain/zero/1.0/"
+    }
         
         item = internetarchive.upload(
             identifier,
@@ -213,23 +350,39 @@ def compare_archives(url1: str, url2: str) -> None:
         with col1:
             st.markdown("### Version 1")
             st.markdown(f"Source: {url1}")
-            st.components.iframe(url1, height=600, scrolling=True)
+            # Use HTML iframe instead of streamlit component
+            st.markdown(f'<iframe src="{url1}" width="100%" height="600px"></iframe>', unsafe_allow_html=True)
         
         with col2:
             st.markdown("### Version 2")
             st.markdown(f"Source: {url2}")
-            st.components.iframe(url2, height=600, scrolling=True)
+            # Use HTML iframe instead of streamlit component
+            st.markdown(f'<iframe src="{url2}" width="100%" height="600px"></iframe>', unsafe_allow_html=True)
 
         # Add comparison tools
         st.markdown("### Comparison Tools")
-        if st.button("📸 Screenshot Comparison"):
-            st.info("Screenshot comparison feature coming soon!")
         
-        if st.button("📊 Text Diff"):
-            st.info("Text difference analysis coming soon!")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("📸 Screenshot Comparison"):
+                st.info("Screenshot comparison feature coming soon!")
+                # You can add screenshot comparison logic here
+        
+        with col2:
+            if st.button("📊 Text Diff"):
+                st.info("Text difference analysis coming soon!")
+                # You can add text difference logic here
+        
+        # Add URLs for manual comparison
+        st.markdown("### 🔗 Direct Links")
+        st.markdown(f"Version 1: [{url1}]({url1})")
+        st.markdown(f"Version 2: [{url2}]({url2})")
 
     except Exception as e:
         st.error(f"Error comparing archives: {str(e)}")
+        st.markdown("### Manual Comparison Links")
+        st.markdown(f"Version 1: [{url1}]({url1})")
+        st.markdown(f"Version 2: [{url2}]({url2})")
         
 
 def verify_archive_status(url: str, service: str) -> bool:
@@ -371,6 +524,7 @@ def retrieve_memento_links(url: str) -> Dict[str, Any]:
     except Exception as e:
         return f"Error: {str(e)}"
 
+# Update process_service function
 def process_service(service: str, url: str, mode: str) -> str:
     """Process a single archive service request."""
     try:
@@ -379,13 +533,24 @@ def process_service(service: str, url: str, mode: str) -> str:
                 return submit_to_wayback(url)
             elif service == "Archive.today":
                 return submit_to_archive_today(url)
-        else:
-            if service == "Memento":
-                return retrieve_memento_links(url)
-            elif service == "Wayback Machine":
-                return f"Check archived versions at: https://web.archive.org/web/*/{url}"
-            elif service == "Archive.today":
-                return f"Visit Archive.today homepage to search: https://archive.today"
+            # Add other services as needed
+        else:  # Retrieve mode
+            base_urls = {
+                "Wayback Machine": f"https://web.archive.org/web/*/{url}",
+                "Archive.today": f"https://archive.today/{url}",
+                "Archive.is": f"https://archive.is/{url}",
+                "Google Cache": f"https://webcache.googleusercontent.com/search?q=cache:{url}",
+                "WebCite": f"http://www.webcitation.org/query?url={url}",
+                "Megalodon": f"http://megalodon.jp/?url={url}",
+                "TimeTravel": f"https://timetravel.mementoweb.org/list/{url}",
+                "Perma.cc": f"https://perma.cc/search?q={url}",
+                "Memento": retrieve_memento_links(url)
+            }
+            
+            if service in base_urls:
+                return base_urls[service]
+            return f"Service {service} not configured for retrieval"
+            
     except Exception as e:
         return f"Error processing {service}: {str(e)}"
 
@@ -409,76 +574,119 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.header("Archive URL")
     
-    # Service selection using a more visual approach
-    col1, col2, col3 = st.columns(3)
+    archive_method = st.radio(
+        "Choose archive method:",
+        ["Online Services", "Local WARC"],
+        horizontal=True,
+        help="Online Services: Use archive.org, archive.today, etc.\nLocal WARC: Create local WARC file"
+    )
     
-    with col1:
-        wayback = st.checkbox("Wayback Machine", value=True,
-                            help="Internet Archive's Wayback Machine - Most reliable")
-    with col2:
-        archive_today = st.checkbox("Archive.today", 
-                                  help="Good for dynamic content and paywalled sites")
-    with col3:
-        memento = st.checkbox("Memento", 
-                            help="Aggregates multiple archive services")
+    if archive_method == "Online Services":
+        # Service selection using a more visual approach
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            wayback = st.checkbox("Wayback Machine", value=True,
+                                help="Internet Archive's Wayback Machine - Most reliable")
+        with col2:
+            archive_today = st.checkbox("Archive.today", 
+                                    help="Good for dynamic content and paywalled sites")
+        with col3:
+            memento = st.checkbox("Memento", 
+                                help="Aggregates multiple archive services")
 
-    selected_services = []
-    if wayback:
-        selected_services.append("Wayback Machine")
-    if archive_today:
-        selected_services.append("Archive.today")
-    if memento:
-        selected_services.append("Memento")
+        selected_services = []
+        if wayback:
+            selected_services.append("Wayback Machine")
+        if archive_today:
+            selected_services.append("Archive.today")
+        if memento:
+            selected_services.append("Memento")
 
-    if st.button("🚀 Archive Now", use_container_width=True):
-        if not url:
-            st.error("Please enter a URL")
-        else:
-            if not url.startswith(('http://', 'https://')):
-                url = 'https://' + url
-            
-            url = clean_url(url)
-            
-            if not validate_url(url):
-                st.error("Unable to access the URL. Please check if it's correct and accessible.")
+        if st.button("🚀 Archive Now", use_container_width=True):
+            if not url:
+                st.error("Please enter a URL")
             else:
-                if not selected_services:
-                    st.warning("Please select at least one archive service")
+                if not url.startswith(('http://', 'https://')):
+                    url = 'https://' + url
+                
+                url = clean_url(url)
+                
+                if not validate_url(url):
+                    st.error("Unable to access the URL. Please check if it's correct and accessible.")
                 else:
-                    results = {}
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
+                    if not selected_services:
+                        st.warning("Please select at least one archive service")
+                    else:
+                        results = {}
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
 
-                    with st.spinner("Archiving in progress..."):
-                        for idx, service in enumerate(selected_services):
-                            status_text.text(f"Processing {service}...")
-                            try:
-                                results[service] = process_service(service, url, "Archive URL")
-                            except Exception as e:
-                                results[service] = f"Failed: {str(e)}"
-                            progress_bar.progress((idx + 1) / len(selected_services))
+                        with st.spinner("Archiving in progress..."):
+                            for idx, service in enumerate(selected_services):
+                                status_text.text(f"Processing {service}...")
+                                try:
+                                    results[service] = process_service(service, url, "Archive URL")
+                                except Exception as e:
+                                    results[service] = f"Failed: {str(e)}"
+                                progress_bar.progress((idx + 1) / len(selected_services))
 
-                    status_text.empty()
-                    progress_bar.empty()
-                    
-                    # Display results
-                    for service, result in results.items():
-                        with st.expander(f"{service} Result", expanded=True):
-                            if "✅" in str(result):
-                                st.success(result)
-                            elif "❌" in str(result):
-                                st.error(result)
-                            else:
-                                st.info(result)
+                        status_text.empty()
+                        progress_bar.empty()
+                        
+                        # Display results
+                        for service, result in results.items():
+                            with st.expander(f"{service} Result", expanded=True):
+                                if "✅" in str(result):
+                                    st.success(result)
+                                elif "❌" in str(result):
+                                    st.error(result)
+                                else:
+                                    st.info(result)
+    
+    else:  # Local WARC
+        st.markdown("### 📥 Local WARC Archive")
+        if st.button("📦 Create WARC Archive", use_container_width=True):
+            if not url:
+                st.error("Please enter a URL")
+            else:
+                try:
+                    with st.spinner("Creating WARC archive..."):
+                        # Clean and validate URL
+                        url = clean_url(url)
+                        if not url.startswith(('http://', 'https://')):
+                            url = 'https://' + url
+                            
+                        if not validate_url(url):
+                            st.error("Unable to access the URL. Please check if it's correct and accessible.")
+                        else:
+                            # Archive the page
+                            warc_path = archive_page(url)
+                            
+                            # Show success message
+                            st.success(f"✅ Page archived successfully!")
+                            st.info(f"WARC file created: {warc_path.name}")
+                            
+                            # Option to view content
+                            if st.button("👀 View Archived Content"):
+                                view_warc_content(warc_path)
+                            
+                            # Option to upload to Internet Archive
+                            if st.button("🔄 Upload to Internet Archive"):
+                                result = upload_to_internet_archive(warc_path)
+                                st.write(result)
+                                
+                except Exception as e:
+                    st.error(f"Failed to create WARC: {str(e)}")
 
-# Tab 2: Retrieve Archives
 # In Tab 2 (Retrieve Archives), replace the existing results display with this:
 with tab2:
     st.header("Retrieve Archives")
     
     retrieve_service = st.radio(
         "Choose archive service to search:",
-        ["All Services", "Wayback Machine Only", "Archive.today Only", "Memento Only"],
+        ["All Services", "Wayback Machine Only", "Archive.today Only", 
+         "Memento Only", "Google Cache Only", "WebCite Only"],
         horizontal=True
     )
     
@@ -493,19 +701,15 @@ with tab2:
             services_to_check = []
             if retrieve_service == "All Services":
                 services_to_check = list(ARCHIVE_SITES.keys())
-            elif retrieve_service == "Wayback Machine Only":
-                services_to_check = ["Wayback Machine"]
-            elif retrieve_service == "Archive.today Only":
-                services_to_check = ["Archive.today"]
-            elif retrieve_service == "Memento Only":
-                services_to_check = ["Memento"]
+            else:
+                service_name = retrieve_service.replace(" Only", "")
+                services_to_check = [service_name]
 
-            # New verbose results display
-            with st.expander("🔍 Search Progress", expanded=True):
-                st.info("Initiating archive search...")
+            # Results display
+            with st.expander("🔍 Search Results", expanded=True):
+                st.info("Searching archives...")
                 results = {}
                 
-                # Progress bar
                 progress_bar = st.progress(0)
                 status_text = st.empty()
                 
@@ -513,27 +717,13 @@ with tab2:
                     status_text.text(f"🔍 Checking {service}...")
                     progress_bar.progress((idx + 1) / len(services_to_check))
                     
-                    # Show detailed progress
-                    st.write(f"📡 Querying {service}...")
-                    results[service] = process_service(service, url, "Retrieve Archived Versions")
-                    
-                    # Show individual results
-                    if isinstance(results[service], dict):
-                        st.json(results[service])
+                    result = process_service(service, url, "Retrieve")
+                    if isinstance(result, dict):
+                        st.json(result)
                     else:
-                        st.write(f"Result from {service}: {results[service]}")
-                    
-                    # Add direct links
-                    if service == "Wayback Machine":
-                        st.markdown(f"🔗 Direct link: https://web.archive.org/web/*/{url}")
-                    elif service == "Archive.today":
-                        st.markdown(f"🔗 Search at: https://archive.is/{url}")
-                    elif service == "Google Cache":
-                        st.markdown(f"🔗 Cache: https://webcache.googleusercontent.com/search?q=cache:{url}")
-                    elif service == "WebCite":
-                        st.markdown(f"🔗 WebCite: http://www.webcitation.org/query?url={url}")
-                    elif service == "Megalodon":
-                        st.markdown(f"🔗 Megalodon: http://megalodon.jp/?url={url}")
+                        with st.expander(f"📑 {service} Results", expanded=True):
+                            st.markdown(f"🔗 [View Archive]({result})")
+                            st.markdown(f"Direct link: `{result}`")
                     
                 progress_bar.empty()
                 status_text.empty()
@@ -610,22 +800,37 @@ with tab4:
     else:
         for warc in local_warcs:
             info = get_warc_info(warc)
-            with st.expander(f"📄 {info['name']}", expanded=False):
-                st.write(f"Size: {info['size']}")
-                st.write(f"Last Modified: {info['modified']}")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button(f"🔄 Sync {info['name']}", key=f"sync_{info['name']}"):
-                        result = sync_to_internet_archive(warc)
-                        st.write(result)
-                with col2:
-                    if st.button(f"❌ Delete {info['name']}", key=f"delete_{info['name']}"):
-                        try:
-                            warc.unlink()
-                            st.success("File deleted")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error deleting file: {e}")
+            # In Tab 4, after displaying file info
+with st.expander(f"📄 {info['name']}", expanded=False):
+    st.write(f"Size: {info['size']}")
+    st.write(f"Last Modified: {info['modified']}")
+    
+    # Add View button
+    if st.button(f"👀 View Content", key=f"view_{info['name']}"):
+        view_warc_content(warc)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button(f"🔄 Sync", key=f"sync_{info['name']}"):
+            result = sync_to_internet_archive(warc)
+            st.write(result)
+    with col2:
+        if st.button(f"⬇️ Download", key=f"download_{info['name']}"):
+            with open(warc, "rb") as file:
+                st.download_button(
+                    label="Download WARC",
+                    data=file,
+                    file_name=info['name'],
+                    mime="application/warc"
+                )
+    with col3:
+        if st.button(f"❌ Delete", key=f"delete_{info['name']}"):
+            try:
+                warc.unlink()
+                st.success("File deleted")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error deleting file: {e}")
 
 # Footer
 st.markdown("---")
@@ -635,3 +840,6 @@ st.markdown("""
     <a href="https://github.com/shadowdevnotreal/wwwscope" target="_blank">GitHub</a></p>
 </div>
 """, unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()
