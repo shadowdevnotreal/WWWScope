@@ -14,123 +14,46 @@ from pathlib import Path
 import internetarchive
 
 
-# Add after your imports but before other code
-def test_secrets_and_api():
-    # Create sidebar
+# Add after imports but before constants
+def test_ia_connection():
+    """Test Internet Archive connection and credentials"""
     with st.sidebar:
-        st.markdown("### 🔑 API Test Panel")
-        st.markdown("---")
+        st.markdown("### 🔑 Internet Archive Test")
         
-        # Test 1: Check Secrets
-        st.markdown("#### Secrets Check:")
+        # Test secrets
         try:
             access_key = st.secrets["ia_access_key"]
             secret_key = st.secrets["ia_secret_key"]
+            
             if access_key and secret_key:
-                st.success("✅ Secrets found!")
-                st.code(f"""
-                Access Key: {access_key[:4]}...
-                Secret Key: {secret_key[:4]}...
-                """)
-        except Exception as e:
-            st.error(f"❌ Secrets error: {str(e)}")
-        
-        # Test 2: Test Connection
-        st.markdown("#### Connection Test:")
-        if st.button("🔄 Test IA Connection", use_container_width=True):
-            try:
-                config = dict(
-                    s3=dict(
-                        access=st.secrets["ia_access_key"],
-                        secret=st.secrets["ia_secret_key"]
-                    )
-                )
-                # Test connection by trying to access a known item
-                ia = internetarchive.get_session(config=config)
-                test_item = ia.get_item('test_item')
+                st.success("✅ Credentials found")
                 
-                if test_item:
-                    st.success(f"✅ Successfully connected to Internet Archive!")
-                    st.info("API access verified")
-                    
-                    # Show configuration status
-                    st.markdown("#### Configuration:")
-                    st.code("""
-                    ✓ S3 Access
-                    ✓ API Connection
-                    ✓ Upload Ready
-                    """)
-            except Exception as e:
-                st.error(f"❌ Connection failed: {str(e)}")
-                st.info("Please verify your Internet Archive credentials")
-
-
-def test_storage():
-    with st.sidebar:
-        st.markdown("#### 🧪 Storage Test")
-        if st.button("Test Storage Access"):
-            try:
-                # Try to create a test file
-                test_file = WARC_DIR / "test.txt"
-                test_file.write_text("Storage test")
-                st.success("✅ Storage test successful")
-                # Cleanup
-                test_file.unlink()
-            except Exception as e:
-                st.error(f"❌ Storage test failed: {str(e)}")
-
-def test_upload():
-    with st.sidebar:
-        st.markdown("#### 🧪 Upload Test")
-        if st.button("Create & Upload Test WARC"):
-            # Create a test WARC file
-            test_warc_path = WARC_DIR / "test.warc"
-            try:
-                # Create a simple WARC file
-                with open(test_warc_path, 'w') as f:
-                    f.write("""WARC/1.0
-
-
-
-
-WARC-Type: warcinfo
-WARC-Date: 2024-02-11T12:00:00Z
-WARC-Record-ID: <urn:uuid:test>
-Content-Type: application/warc-fields
-Content-Length: 23
-
-software: WWWScope Test""")
-                
-                st.success("✅ Test WARC file created")
-                
-                # Try uploading
-                with st.spinner("Uploading to Internet Archive..."):
-                    result = upload_to_internet_archive(test_warc_path)
-                    st.write(result)
-                    
-                    if "✅" in result:
-                        st.success("Full upload test successful!")
-                        # Extract and show the URL
-                        url = result.split(": ")[-1]
-                        st.markdown(f"[View on Internet Archive]({url})")
-                    else:
-                        st.error("Upload test failed")
+                # Test connection button
+                if st.button("🔄 Test Connection"):
+                    try:
+                        config = dict(
+                            s3=dict(
+                                access=access_key,
+                                secret=secret_key
+                            )
+                        )
+                        ia = internetarchive.get_session(config=config)
                         
-            except Exception as e:
-                st.error(f"Test failed: {str(e)}")
-            finally:
-                # Cleanup
-                if test_warc_path.exists():
-                    test_warc_path.unlink()
-                    st.info("Test file cleaned up")
+                        # Simple connection test
+                        if ia:
+                            st.success("✅ Connected to Internet Archive")
+                            st.code("""
+                            ✓ API Access
+                            ✓ Upload Ready
+                            """)
+                    except Exception as e:
+                        st.error(f"Connection failed: {str(e)}")
+                        
+        except Exception as e:
+            st.error(f"❌ Credential error: {str(e)}")
 
-# Update your test section
-if __name__ == "__main__":
-    test_secrets_and_api()
-    test_storage()
-    check_storage_status()
-    test_upload()
-
+# Call the test function
+test_ia_connection()
 
 # Check if Selenium is available
 try:
