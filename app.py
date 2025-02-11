@@ -64,6 +64,7 @@ def test_secrets_and_api():
                 st.error(f"❌ Connection failed: {str(e)}")
                 st.info("Please verify your Internet Archive credentials")
 
+
 def test_storage():
     with st.sidebar:
         st.markdown("#### 🧪 Storage Test")
@@ -78,8 +79,6 @@ def test_storage():
             except Exception as e:
                 st.error(f"❌ Storage test failed: {str(e)}")
 
-
-
 def test_upload():
     with st.sidebar:
         st.markdown("#### 🧪 Upload Test")
@@ -90,6 +89,10 @@ def test_upload():
                 # Create a simple WARC file
                 with open(test_warc_path, 'w') as f:
                     f.write("""WARC/1.0
+
+
+
+
 WARC-Type: warcinfo
 WARC-Date: 2024-02-11T12:00:00Z
 WARC-Record-ID: <urn:uuid:test>
