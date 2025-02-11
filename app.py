@@ -13,45 +13,45 @@ from datetime import datetime
 from pathlib import Path
 import internetarchive
 
-# Add this near the top of your app, after your imports
-# Temporary test section
-st.sidebar.markdown("### Secret Test")
-try:
-    # Test access to secrets
-    access_key = st.secrets["ia_access_key"]
-    secret_key = st.secrets["ia_secret_key"]
-    
-    # Show first few characters of keys (safely)
-    st.sidebar.success("✅ Secrets loaded successfully!")
-    st.sidebar.write(f"Access Key starts with: {access_key[:4]}...")
-    st.sidebar.write(f"Secret Key starts with: {secret_key[:4]}...")
-except Exception as e:
-    st.sidebar.error(f"❌ Error accessing secrets: {str(e)}")
+# Test Section - Add this right after your imports
+def test_secrets_and_api():
+    # Create sidebar
+    with st.sidebar:
+        st.markdown("### 🔑 API Test Panel")
+        st.markdown("---")
+        
+        # Test 1: Check Secrets
+        st.markdown("#### Secrets Check:")
+        try:
+            access_key = st.secrets["ia_access_key"]
+            secret_key = st.secrets["ia_secret_key"]
+            if access_key and secret_key:
+                st.success("✅ Secrets found!")
+                st.code(f"""
+                Access Key: {access_key[:4]}...
+                Secret Key: {secret_key[:4]}...
+                """)
+        except Exception as e:
+            st.error(f"❌ Secrets error: {str(e)}")
+        
+        # Test 2: Test Connection
+        st.markdown("#### Connection Test:")
+        if st.button("🔄 Test IA Connection", use_container_width=True):
+            try:
+                config = dict(
+                    s3=dict(
+                        access=st.secrets["ia_access_key"],
+                        secret=st.secrets["ia_secret_key"]
+                    )
+                )
+                ia = internetarchive.get_session(config=config)
+                user_info = ia.get_user_info()
+                st.success(f"✅ Connected as: {user_info.get('screenname', 'Unknown')}")
+            except Exception as e:
+                st.error(f"❌ Connection failed: {str(e)}")
 
-# Add a function to test Internet Archive connection
-def test_ia_connection():
-    try:
-        import internetarchive
-        config = dict(
-            s3=dict(
-                access=st.secrets["ia_access_key"],
-                secret=st.secrets["ia_secret_key"]
-            )
-        )
-        # Test authentication
-        ia = internetarchive.get_session(config=config)
-        user_info = ia.get_user_info()
-        return True, user_info.get('screenname', 'Unknown')
-    except Exception as e:
-        return False, str(e)
-
-# Add this to your sidebar
-if st.sidebar.button("Test IA Connection"):
-    success, result = test_ia_connection()
-    if success:
-        st.sidebar.success(f"✅ Connected as: {result}")
-    else:
-        st.sidebar.error(f"❌ Connection failed: {result}")
+# Call the test function
+test_secrets_and_api()
 
 # Check if Selenium is available
 try:
