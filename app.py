@@ -116,20 +116,27 @@ def upload_to_internet_archive(file_path: Path) -> str:
             )
         )
         
-        identifier = f"warc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # Create unique identifier
+        identifier = f"wwwscope_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
+        # Updated metadata
         metadata = dict(
-            title=f"WARC Archive {file_path.name}",
+            title=f"WWWScope Archive: {file_path.name}",
             mediatype="web",
-            collection="web_archive",
-            date=datetime.now().strftime("%Y-%m-%d")
+            collection="opensource",  # Changed to opensource collection
+            creator="WWWScope",
+            date=datetime.now().strftime("%Y-%m-%d"),
+            subject="web archive",
+            description="Web archive created using WWWScope"
         )
         
         item = internetarchive.upload(
             identifier,
             files=[str(file_path)],
             metadata=metadata,
-            config=config
+            config=config,
+            queue_derive=True,
+            verify=True
         )
         
         return f"✅ Successfully uploaded to Internet Archive: https://archive.org/details/{identifier}"
