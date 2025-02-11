@@ -14,47 +14,6 @@ from pathlib import Path
 import internetarchive
 
 
-# Add after imports but before constants
-def test_ia_connection():
-    """Test Internet Archive connection and credentials"""
-    with st.sidebar:
-        st.markdown("### 🔑 Internet Archive Test")
-        
-        # Test secrets
-        try:
-            access_key = st.secrets["ia_access_key"]
-            secret_key = st.secrets["ia_secret_key"]
-            
-            if access_key and secret_key:
-                st.success("✅ Credentials found")
-                
-                # Test connection button
-                if st.button("🔄 Test Connection"):
-                    try:
-                        config = dict(
-                            s3=dict(
-                                access=access_key,
-                                secret=secret_key
-                            )
-                        )
-                        ia = internetarchive.get_session(config=config)
-                        
-                        # Simple connection test
-                        if ia:
-                            st.success("✅ Connected to Internet Archive")
-                            st.code("""
-                            ✓ API Access
-                            ✓ Upload Ready
-                            """)
-                    except Exception as e:
-                        st.error(f"Connection failed: {str(e)}")
-                        
-        except Exception as e:
-            st.error(f"❌ Credential error: {str(e)}")
-
-# Call the test function
-test_ia_connection()
-
 # Check if Selenium is available
 try:
     from selenium import webdriver
