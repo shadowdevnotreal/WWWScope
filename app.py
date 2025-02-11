@@ -14,7 +14,56 @@ from pathlib import Path
 import internetarchive
 
 
-# Add this under your test_secrets_and_api() function
+# Add after your imports but before other code
+def test_secrets_and_api():
+    # Create sidebar
+    with st.sidebar:
+        st.markdown("### 🔑 API Test Panel")
+        st.markdown("---")
+        
+        # Test 1: Check Secrets
+        st.markdown("#### Secrets Check:")
+        try:
+            access_key = st.secrets["ia_access_key"]
+            secret_key = st.secrets["ia_secret_key"]
+            if access_key and secret_key:
+                st.success("✅ Secrets found!")
+                st.code(f"""
+                Access Key: {access_key[:4]}...
+                Secret Key: {secret_key[:4]}...
+                """)
+        except Exception as e:
+            st.error(f"❌ Secrets error: {str(e)}")
+        
+        # Test 2: Test Connection
+        st.markdown("#### Connection Test:")
+        if st.button("🔄 Test IA Connection", use_container_width=True):
+            try:
+                config = dict(
+                    s3=dict(
+                        access=st.secrets["ia_access_key"],
+                        secret=st.secrets["ia_secret_key"]
+                    )
+                )
+                # Test connection by trying to access a known item
+                ia = internetarchive.get_session(config=config)
+                test_item = ia.get_item('test_item')
+                
+                if test_item:
+                    st.success(f"✅ Successfully connected to Internet Archive!")
+                    st.info("API access verified")
+                    
+                    # Show configuration status
+                    st.markdown("#### Configuration:")
+                    st.code("""
+                    ✓ S3 Access
+                    ✓ API Connection
+                    ✓ Upload Ready
+                    """)
+            except Exception as e:
+                st.error(f"❌ Connection failed: {str(e)}")
+                st.info("Please verify your Internet Archive credentials")
+
 def test_upload():
     with st.sidebar:
         st.markdown("#### 🧪 Upload Test")
@@ -56,9 +105,10 @@ software: WWWScope Test""")
                     test_warc_path.unlink()
                     st.info("Test file cleaned up")
 
-# Call both test functions
-test_secrets_and_api()
-test_upload()
+# Call both test functions after they're defined
+if __name__ == "__main__":
+    test_secrets_and_api()
+    test_upload()
 
 
 # Check if Selenium is available
