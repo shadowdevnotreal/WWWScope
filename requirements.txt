@@ -5,3 +5,4 @@ selenium
 webdriver-manager
 internetarchive
 internetarchive==3.5.0
+warcio==1.7.4
