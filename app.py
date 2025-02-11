@@ -11,6 +11,7 @@ from functools import lru_cache
 from typing import Dict, Any
 from datetime import datetime
 from pathlib import Path
+import internetarchive
 
 # Check if Selenium is available
 try:
@@ -67,12 +68,56 @@ def compress_warc(file_path: Path) -> Path:
         return gz_path
     return file_path
 
+def get_ia_credentials():
+    """Safely get Internet Archive credentials."""
+    try:
+        access_key = st.secrets["ia_access_key"]
+        secret_key = st.secrets["ia_secret_key"]
+        return access_key, secret_key
+    except Exception:
+        st.warning("Internet Archive credentials not configured. WARC sync disabled.")
+        return None, None
+
+def upload_to_internet_archive(file_path: Path) -> str:
+    """Upload WARC file to Internet Archive."""
+    access_key, secret_key = get_ia_credentials()
+    
+    if not access_key or not secret_key:
+        return "❌ Internet Archive credentials not configured"
+    
+    try:
+        config = dict(
+            s3=dict(
+                access=access_key,
+                secret=secret_key
+            )
+        )
+        
+        identifier = f"warc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        metadata = dict(
+            title=f"WARC Archive {file_path.name}",
+            mediatype="web",
+            collection="web_archive",
+            date=datetime.now().strftime("%Y-%m-%d")
+        )
+        
+        item = internetarchive.upload(
+            identifier,
+            files=[str(file_path)],
+            metadata=metadata,
+            config=config
+        )
+        
+        return f"✅ Successfully uploaded to Internet Archive: https://archive.org/details/{identifier}"
+    except Exception as e:
+        return f"❌ Upload failed: {str(e)}"
+        
+
 def sync_to_internet_archive(file_path: Path) -> str:
     """Sync WARC file to Internet Archive."""
     try:
-        # Here you would implement the actual Internet Archive upload
-        # Using their API or SDK
-        return "✅ Successfully synced to Internet Archive"
+        return upload_to_internet_archive(file_path)
     except Exception as e:
         return f"❌ Sync failed: {e}"
 
@@ -228,6 +273,7 @@ def submit_to_wayback(url: str) -> str:
         
 
 def submit_to_archive_today(url: str) -> str:
+    """Submit URL to Archive.today with improved CAPTCHA handling."""
     message = """
     ⚠️ Archive.today CAPTCHA Notice:
     
@@ -239,11 +285,6 @@ def submit_to_archive_today(url: str) -> str:
     Status: Attempting archive...
     """
     st.info(message)
-    
-    # Remove 'result +' from return statements
-    return f"✅ Archived Successfully: {archived_url}"
-    return f"✅ Archived Successfully at {mirror}"
-    return "❌ Archive.today failed on all mirrors."
     
     if SELENIUM_AVAILABLE:
         driver = get_selenium_driver()
@@ -261,7 +302,7 @@ def submit_to_archive_today(url: str) -> str:
                         time.sleep(10)
                         archived_url = driver.current_url
                         driver.quit()
-                        return result + f"✅ Archived Successfully: {archived_url}"
+                        return f"✅ Archived Successfully: {archived_url}"
                     except Exception:
                         continue
                 driver.quit()
@@ -283,11 +324,12 @@ def submit_to_archive_today(url: str) -> str:
                 timeout=40
             )
             if response.ok:
-                return result + f"✅ Archived Successfully at {mirror}"
+                return f"✅ Archived Successfully at {mirror}"
         except requests.exceptions.RequestException:
             continue
 
-    return result + "❌ Archive.today failed on all mirrors."
+    return "❌ Archive.today failed on all mirrors."
+    
 
 def retrieve_memento_links(url: str) -> Dict[str, Any]:
     """Retrieve archived versions from Memento Web."""
@@ -496,8 +538,15 @@ with tab3:
 # Tab 4: WARC Management
 with tab4:
     st.header("📦 WARC Management")
-    st.write("Store and sync WARC files with Internet Archive")
     
+    # Check credentials
+    access_key, secret_key = get_ia_credentials()
+    if not access_key or not secret_key:
+        st.warning("⚠️ Internet Archive sync is disabled. Configure credentials in Streamlit settings.")
+    else:
+        st.success("✅ Internet Archive credentials configured")
+
+    st.write("Store and sync WARC files with Internet Archive")
     col1, col2 = st.columns([2, 1])
     
     with col1:
