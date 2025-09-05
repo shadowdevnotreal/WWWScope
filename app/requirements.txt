@@ -4,7 +4,7 @@ requests
 selenium
 webdriver-manager
 internetarchive
-internetarchive==3.5.0
+internetarchive==5.5.1
 warcio==1.7.4
 beautifulsoup4==4.9.3
 urllib3==2.5.0
