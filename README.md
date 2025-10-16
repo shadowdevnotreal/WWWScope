@@ -208,7 +208,7 @@ Features:
 
 ## 🏗️ **System Architecture**
 
-<details>
+<details open>
 <summary><strong>Core Architecture Overview</strong> - Scalable and maintainable design</summary>
 
 ### 🔧 **Application Flow**
@@ -238,6 +238,8 @@ graph TD
     style E fill:#f3e5f5
     style F fill:#e8f5e8
 ```
+</details>
+
 
 ### 🔄 **Comparison Workflow**
 ```mermaid
