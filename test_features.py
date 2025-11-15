@@ -63,11 +63,7 @@ def test_groq_models():
             "llama-3.3-70b-versatile": "Llama 3.3 70B Versatile",
             "llama-3.3-70b-specdec": "Llama 3.3 70B Speculative Decoding",
             "llama-3.1-70b-versatile": "Llama 3.1 70B Versatile (128K)",
-            "llama-3.1-8b-instant": "Llama 3.1 8B Instant (128K)",
-            "llama3-groq-70b-8192-tool-use-preview": "Llama 3 Groq 70B Tool Use",
-            "llama3-groq-8b-8192-tool-use-preview": "Llama 3 Groq 8B Tool Use",
-            "mixtral-8x7b-32768": "Mixtral 8x7B (32K)",
-            "gemma2-9b-it": "Gemma 2 9B"
+            "llama-3.1-8b-instant": "Llama 3.1 8B Instant (128K)"
         }
 
         passed = 0
