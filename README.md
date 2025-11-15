@@ -6,7 +6,7 @@
 
 ### ✨ Archive, compare, and sync web history with ease - Preserve the internet, one page at a time
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/shadowdevnotreal/WWWScope)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/shadowdevnotreal/WWWScope)
 [![License](https://img.shields.io/badge/license-GPL%20v3.0-green.svg)](LICENSE)
 [![Made with Love](https://img.shields.io/badge/made%20with-❤️-red.svg)](https://github.com/shadowdevnotreal/WWWScope)
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen.svg)](https://wwwscope.streamlit.app)
@@ -37,9 +37,10 @@ WWWScope is a comprehensive web archiving and comparison platform that transform
 
 ```
 📸 Multi-Service Archiving    🔄 Version Comparison      📦 WARC Management
-🤖 Automated Workflows        🔍 Visual Diff Tools       ☁️ Cloud Integration
+🤖 AI-Powered Analysis        🔍 Visual Diff Tools       ☁️ Cloud Integration
 🔒 Privacy-Focused            ✨ Modern UI/UX            📊 Real-time Analytics
 ⚡ High Performance           🌐 Internet Archive Sync   🎯 Research-Grade
+🧠 Smart Summarization        🏷️ Auto-Metadata          ⚡ Ultra-Fast Inference
 ```
 
 ### 🎯 **Perfect For**
@@ -53,6 +54,71 @@ WWWScope is a comprehensive web archiving and comparison platform that transform
 ---
 
 ## ✨ **Features Overview**
+
+### 🤖 **AI-Powered Archive Analysis** ⚡ NEW!
+<details open>
+<summary><strong>Groq-Powered Intelligence for Smart Archiving</strong> - Ultra-fast AI insights (~280 tokens/sec)</summary>
+
+Transform your web archiving workflow with cutting-edge AI capabilities powered by **Groq's Lightning-Fast Inference**:
+
+- **🧠 Archive Content Summarization** - AI-generated summaries of archived pages
+  - Automatically extract main topics and key information
+  - Identify content type and archival value
+  - Generate concise 150-word summaries in seconds
+  - Perfect for quickly understanding large archive collections
+
+- **🔍 Smart Diff Explanation** - Plain English change analysis
+  - Explain what changed between two archive versions
+  - Identify significant vs. minor modifications
+  - Highlight content additions, removals, and updates
+  - AI-powered significance detection (SIGNIFICANT/MINOR/NEGLIGIBLE)
+
+- **🏷️ Automatic Metadata Generation** - Smart tagging and categorization
+  - Generate descriptive titles and descriptions
+  - Auto-create relevant tags (5 keywords)
+  - Classify content by category
+  - Perfect for Internet Archive submissions
+
+- **📊 Content Classification** - Intelligent content analysis
+  - Type detection (news, blog, documentation, social, ecommerce, etc.)
+  - Topic extraction (3-5 main topics)
+  - Sentiment analysis (positive, neutral, negative, mixed)
+  - Archival value assessment (high, medium, low with reasoning)
+
+- **⚖️ Archive Quality Assessment** - Completeness verification
+  - Evaluate if essential content was captured
+  - Identify missing elements (images, scripts, interactive features)
+  - Quality scoring (1-10 scale)
+  - Actionable recommendations for re-archiving
+
+- **🎯 Related Archive Suggestions** - Discover what else to preserve
+  - AI suggests related URLs worth archiving
+  - Identifies connected topics and domains
+  - Helps build comprehensive archive collections
+
+**Powered By:**
+- **Provider:** Groq (Industry-leading inference speed)
+- **Default Model:** Llama 3.3 70B Versatile
+- **Speed:** ~280 tokens/second (7x faster than GPT-4)
+- **Cost:** Free tier includes 30 requests/minute, 6,000 tokens/minute
+
+**Available Models:**
+- Llama 3.3 70B Versatile (Recommended - fast & accurate)
+- Llama 3.1 8B Instant (Fastest - ~800 tokens/sec)
+- Llama 3 Groq 70B Tool Use (Function calling support)
+- Mixtral 8x7B (Long context - 32K tokens)
+- Gemma 2 9B (Lightweight & efficient)
+
+**Quick Setup:**
+1. Get free API key from [console.groq.com](https://console.groq.com)
+2. Configure in sidebar: Settings → Enable AI Features
+3. Enter API key, test connection, and save
+4. Choose your preferred model
+5. Start using AI features in Compare Archives and WARC Management tabs!
+
+See [AI_FEATURES.md](AI_FEATURES.md) for complete documentation.
+
+</details>
 
 ### 🌐 **Multi-Service Web Archiving**
 <details>
@@ -97,6 +163,13 @@ WWWScope is a comprehensive web archiving and comparison platform that transform
   - Color-coded diff display with syntax highlighting
   - Export-ready comparison reports
 
+- **🤖 AI-Powered Diff Explanation** - Plain English change analysis ⚡ NEW!
+  - Automatically explain what changed between versions
+  - Identify significant vs. minor modifications
+  - AI-powered significance detection (SIGNIFICANT/MINOR/NEGLIGIBLE)
+  - Context-aware analysis with actionable insights
+  - Powered by Groq's ultra-fast Llama 3.3 70B model
+
 - **🖼️ Live Iframe Preview** - Real-time archive viewing
   - Side-by-side iframe display (Version 1 vs Version 2)
   - XSS protection with HTML escaping
@@ -129,14 +202,32 @@ WWWScope is a comprehensive web archiving and comparison platform that transform
   - Batch sync for multiple files
   - Individual file upload with progress indication
   - Archive.org URL generation for shared access
+  - Enhanced retry logic with progressive backoff (5s, 10s, 15s, 20s, 30s)
+  - Smart mirror rotation for Archive.today (archive.ph, archive.is, archive.fo)
+  - Improved CAPTCHA handling with user-friendly guidance
 
-- **👁️ WARC Content Viewer** - Inspect archived content
-  - `warcio` ArchiveIterator parsing
-  - HTTP headers display per record
-  - HTML content rendering in iframe (600px height)
-  - Download button for individual pages
-  - Expandable sections per URL
-  - Error handling for corrupt files
+- **👁️ Dual-Mode WARC Content Viewer** - Professional archive inspection ⚡ NEW!
+  - **ReplayWeb.page (Recommended)** - Professional WARC viewer
+    - Full JavaScript and CSS rendering
+    - Interactive web page replay with perfect fidelity
+    - No server required - runs entirely in browser
+    - Download WARC file and open in [ReplayWeb.page](https://replayweb.page)
+    - Best for complex pages with dynamic content
+
+  - **Basic Viewer** - Quick in-app preview
+    - `warcio` ArchiveIterator parsing
+    - HTTP headers display per record
+    - HTML content rendering in iframe (600px height)
+    - Download button for individual pages
+    - Expandable sections per URL
+    - Error handling for corrupt files
+    - Best for simple text-based content
+
+- **🤖 AI-Enhanced Features** - Intelligent WARC analysis ⚡ NEW!
+  - Content summarization for archived pages
+  - Automatic metadata generation
+  - Quality assessment and recommendations
+  - See AI-Powered Features section above
 
 - **🗂️ File Management** - Complete lifecycle control
   - List all local WARC files with metadata
@@ -360,18 +451,69 @@ streamlit run app/app.py --server.headless true
    - Use tools:
      - **📸 Screenshot Comparison** - Visual side-by-side
      - **📊 Text Diff Analysis** - Line-by-line changes
+     - **🤖 AI Explain Changes** - Get plain English summary of what changed (NEW!)
      - **👁️ Iframe Preview** - Live embedded view
 
 4. **📦 Manage WARC Files**
    - Choose "WARC Management" tab
    - Upload local WARC files or view existing
    - Click "View Content" to inspect archives
+     - **ReplayWeb.page** - Download and view in professional WARC viewer (NEW!)
+     - **Basic Viewer** - Quick in-app preview with HTTP headers
+   - Use AI features (if enabled):
+     - **📝 Summarize** - AI-generated content summary (NEW!)
+     - **🏷️ Generate Metadata** - Auto-create tags and descriptions (NEW!)
    - Click "Sync" to upload to Internet Archive
    - Download or delete files as needed
 
 ### ⚙️ **Configuration Options**
 
-**Internet Archive Credentials** (Optional - enables sync feature):
+#### **🤖 Groq AI Configuration** (Recommended - enables AI features) ⚡ NEW!
+
+**Option 1: UI Configuration (Easiest)**
+1. Start WWWScope: `streamlit run app/app.py`
+2. Open sidebar → Expand "🤖 Enable AI Features"
+3. Get free API key from [console.groq.com](https://console.groq.com)
+4. Enter API key in the input field
+5. Click "🧪 Test API Key" to verify connection
+6. Click "💾 Save API Key" to persist configuration
+7. Select your preferred model from dropdown
+8. AI features now available in all tabs!
+
+**Option 2: Configuration File**
+
+Create or edit `.streamlit/secrets.toml`:
+```toml
+# Groq AI Configuration (for AI-powered features)
+groq_api_key = "gsk_your_actual_api_key_here"
+
+# Internet Archive (for cloud sync)
+ia_access_key = "your_access_key_here"
+ia_secret_key = "your_secret_key_here"
+```
+
+**Option 3: Environment Variable**
+```bash
+# Linux/Mac
+export GROQ_API_KEY="gsk_your_actual_api_key_here"
+
+# Windows (PowerShell)
+$env:GROQ_API_KEY="gsk_your_actual_api_key_here"
+
+# Windows (CMD)
+set GROQ_API_KEY=gsk_your_actual_api_key_here
+```
+
+**Get Groq API Key (Free):**
+1. Visit [console.groq.com](https://console.groq.com)
+2. Sign up for free account
+3. Navigate to API Keys section
+4. Generate new API key (starts with `gsk_...`)
+5. Free tier: 30 requests/minute, 6,000 tokens/minute
+
+---
+
+#### **🏛️ Internet Archive Credentials** (Optional - enables cloud sync feature)
 
 Create `.streamlit/secrets.toml`:
 ```toml
@@ -395,10 +537,11 @@ ia_secret_key = "your_secret_key_here"
 | ![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white) | ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white) | ![Selenium](https://img.shields.io/badge/Selenium-43B02A?style=for-the-badge&logo=selenium&logoColor=white) | ![Internet Archive](https://img.shields.io/badge/Internet%20Archive-666666?style=for-the-badge&logo=internet-archive&logoColor=white) |
 | ![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white) | ![Requests](https://img.shields.io/badge/Requests-FF6B6B?style=for-the-badge) | ![Chrome](https://img.shields.io/badge/Chrome-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white) | ![WARC](https://img.shields.io/badge/WARC-1.0-blue?style=for-the-badge) |
 
-| Parsing | Testing | DevOps | Analytics |
-|---------|---------|---------|-----------|
-| ![BeautifulSoup](https://img.shields.io/badge/BeautifulSoup4-59666C?style=for-the-badge) | ![Pytest](https://img.shields.io/badge/Pytest-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white) | ![Git](https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white) | ![Streamlit](https://img.shields.io/badge/Analytics-Built--in-FF4B4B?style=for-the-badge) |
-| ![warcio](https://img.shields.io/badge/warcio-1.7.4-green?style=for-the-badge) | Coming Soon | ![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white) | ![Session State](https://img.shields.io/badge/Session%20State-Persistent-blueviolet?style=for-the-badge) |
+| Parsing | AI/ML ⚡ NEW! | DevOps | Analytics |
+|---------|--------------|---------|-----------|
+| ![BeautifulSoup](https://img.shields.io/badge/BeautifulSoup4-59666C?style=for-the-badge) | ![Groq](https://img.shields.io/badge/Groq-FF6B35?style=for-the-badge&logo=ai&logoColor=white) | ![Git](https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white) | ![Streamlit](https://img.shields.io/badge/Analytics-Built--in-FF4B4B?style=for-the-badge) |
+| ![warcio](https://img.shields.io/badge/warcio-1.7.4-green?style=for-the-badge) | ![Llama](https://img.shields.io/badge/Llama%203.3-70B-blueviolet?style=for-the-badge) | ![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white) | ![Session State](https://img.shields.io/badge/Session%20State-Persistent-blueviolet?style=for-the-badge) |
+| ![Pytest](https://img.shields.io/badge/Pytest-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white) | ![Speed](https://img.shields.io/badge/Speed-280%20tok%2Fs-success?style=for-the-badge) | | |
 
 </div>
 
@@ -411,9 +554,18 @@ requests >= 2.31.0           # HTTP library for API calls
 internetarchive >= 3.5.0     # Internet Archive uploader
 warcio >= 1.7.4              # WARC file parser
 beautifulsoup4 >= 4.12.0     # HTML parsing
-selenium >= 4.15.0           # Browser automation (optional)
-webdriver-manager >= 4.0.0   # ChromeDriver management (optional)
-boto3 >= 1.28.0              # AWS S3 (optional)
+
+# AI/ML Enhancement (NEW!)
+groq >= 0.4.0                # Groq AI for ultra-fast inference (~280 tok/s)
+
+# Browser Automation (Optional)
+selenium >= 4.15.0           # Browser automation for screenshots
+webdriver-manager >= 4.0.0   # ChromeDriver management
+
+# Cloud Storage (Optional)
+boto3 >= 1.28.0              # AWS S3 integration
+
+# Testing
 pytest >= 7.4.0              # Testing framework
 ```
 
@@ -496,13 +648,19 @@ pytest >= 7.4.0              # Testing framework
 - Screenshot comparison with 1920x1080 resolution
 - Full-size expandable views for detail examination
 - Text diff with color-coded syntax highlighting
+- **🤖 AI-powered diff explanation** - Plain English change summary (NEW!)
+- **Significance detection** - SIGNIFICANT/MINOR/NEGLIGIBLE ratings (NEW!)
 - Live iframe preview (side-by-side)
 - Smart error handling (rate limits, CAPTCHA, access denied)
 
 **📦 Tab 4: WARC Management**
 - Upload and storage for `.warc` and `.warc.gz` files
+- **ReplayWeb.page integration** - Professional WARC viewer (NEW!)
+- Basic in-app viewer with HTTP headers
+- **🤖 AI content summarization** - Instant archive summaries (NEW!)
+- **🏷️ AI metadata generation** - Auto-create tags and descriptions (NEW!)
 - Internet Archive sync with comprehensive metadata
-- WARC content viewer with HTTP headers
+- Enhanced retry logic with progressive backoff
 - Download and delete capabilities
 
 ---
@@ -602,23 +760,33 @@ git push origin feature/amazing-feature
 <details>
 <summary><strong>🚀 Upcoming Features</strong> - What's coming next</summary>
 
+### ✅ **Recently Completed (v2.1.0)**
+- [x] **🤖 AI-Powered Change Detection** - Intelligent diff analysis with Groq AI
+- [x] **🧠 Smart Summarization** - Archive content summarization
+- [x] **🏷️ Auto-Metadata Generation** - AI-generated tags and descriptions
+- [x] **📊 Content Classification** - Intelligent content analysis and categorization
+- [x] **🎯 ReplayWeb.page Integration** - Professional WARC viewer support
+- [x] **⚡ Enhanced Archive Services** - Improved retry logic and error handling
+
 ### Q1 2025
 - [ ] **🐳 Docker Support** - Containerized deployment with Docker Compose
 - [ ] **📱 Mobile App** - Progressive Web App (PWA) for mobile devices
 - [ ] **🔌 Browser Extension** - One-click archiving from Chrome/Firefox
 - [ ] **📊 Enhanced Analytics** - Archive statistics and usage metrics dashboard
+- [ ] **🔍 Semantic Search** - Search archives by meaning, not just keywords
 
 ### Q2 2025
-- [ ] **🤖 AI-Powered Change Detection** - Intelligent diff analysis with ML
-- [ ] **📈 Diff Visualization** - Interactive visual diff with highlight modes
+- [ ] **📈 Interactive Diff Visualization** - Visual diff with highlight modes and change tracking
 - [ ] **🔄 Scheduled Archiving** - Automated periodic archiving with cron jobs
 - [ ] **☁️ Multi-Cloud Storage** - AWS S3, Google Cloud Storage, Azure Blob
+- [ ] **📈 Archive Clustering** - Automatically group similar archives
 
 ### Q3 2025
 - [ ] **🏢 Enterprise Features** - Team collaboration, role-based access control
 - [ ] **📈 Advanced Reporting** - Export-ready reports (PDF, CSV, JSON)
 - [ ] **🔗 API Integration** - RESTful API for programmatic access
 - [ ] **🌐 Multi-language Support** - Internationalization (i18n)
+- [ ] **🔄 Change Trend Analysis** - Detect patterns across multiple versions
 
 </details>
 
@@ -855,13 +1023,17 @@ Special thanks to the open source community and contributors who made this proje
 - **🔧 Streamlit Team** - For the amazing reactive web framework
 - **🏛️ Internet Archive** - For providing free web archiving services
 - **🌐 Archive.today** - For additional archiving infrastructure
-- **📦 Open Source Libraries** - Beautiful Soup, Selenium, warcio, requests
+- **🤖 Groq** - For ultra-fast AI inference and free API access (NEW!)
+- **🦙 Meta AI** - For the powerful Llama 3.3 70B model
+- **🎯 ReplayWeb.page** - For the professional WARC viewer tool
+- **📦 Open Source Libraries** - Beautiful Soup, Selenium, warcio, requests, groq
 - **🧪 Beta Testers** - Community members who provided valuable feedback
 - **📚 Documentation Contributors** - Writers who helped improve guides
 
 ### 🌟 **Built With**
 
-- **Technology Stack** - Modern Python ecosystem (Streamlit, Requests, Selenium)
+- **Technology Stack** - Modern Python ecosystem (Streamlit, Requests, Selenium, Groq AI)
+- **AI/ML Integration** - Groq's ultra-fast inference with Llama 3.3 70B Versatile
 - **Design Principles** - User-centered design for researchers and archivists
 - **Development Practices** - Test-driven development and continuous integration
 - **Community Feedback** - User-driven feature development
@@ -888,6 +1060,6 @@ Special thanks to the open source community and contributors who made this proje
 
 <a href="https://www.buymeacoffee.com/diatasso" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-violet.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
-**Last Updated**: January 2025 | **Version**: 2.0.0 | **Status**: Production Ready
+**Last Updated**: January 2025 | **Version**: 2.1.0 | **Status**: Production Ready
 
 </div>
