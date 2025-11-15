@@ -201,25 +201,129 @@ def view_warc_content(warc_file: Path):
             "4. Browse the archived site with full functionality!"
         )
 
-        # Option 2: Embedded ReplayWeb.page viewer
+        # Option 2: Embedded ReplayWeb.page viewer using free CDN
         st.markdown("#### Option 2: Embedded Viewer (Experimental)")
-        if st.button("🚀 Launch Embedded ReplayWeb.page Viewer"):
-            st.warning(
-                "⚠️ Note: Embedded viewer requires the WARC file to be accessible via URL. "
-                "For best results, use Option 1 above."
-            )
+        st.info(
+            "💡 **Using Free CDN:** This viewer loads from jsDelivr (free, no account needed)\n\n"
+            "The embedded viewer works best with smaller WARC files. For large files (>50MB), use Option 1."
+        )
 
-            # Embed ReplayWeb.page
+        if st.button("🚀 Launch Embedded ReplayWeb.page Viewer"):
+            # Create embedded ReplayWeb.page using free jsDelivr CDN
+            # This uses the official replaywebpage library from npm via CDN
             replayweb_html = f"""
-            <iframe
-                src="https://replayweb.page/docs/embedding"
-                width="100%"
-                height="800px"
-                style="border:1px solid #ccc;"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
-            ></iframe>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body {{
+                        margin: 0;
+                        padding: 0;
+                        font-family: Arial, sans-serif;
+                    }}
+                    #viewer {{
+                        width: 100%;
+                        height: 800px;
+                        border: 1px solid #ccc;
+                    }}
+                    .upload-zone {{
+                        text-align: center;
+                        padding: 40px;
+                        background: #f5f5f5;
+                        border: 2px dashed #ccc;
+                        border-radius: 8px;
+                        margin: 20px;
+                    }}
+                    .upload-zone.dragover {{
+                        background: #e3f2fd;
+                        border-color: #2196f3;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="upload-zone" id="dropZone">
+                    <h3>📦 Drag & Drop WARC File Here</h3>
+                    <p>Or click to browse files</p>
+                    <input type="file" id="fileInput" accept=".warc,.warc.gz" style="display:none;">
+                    <button onclick="document.getElementById('fileInput').click()"
+                            style="padding: 10px 20px; font-size: 16px; cursor: pointer;">
+                        Choose WARC File
+                    </button>
+                </div>
+                <div id="viewer"></div>
+
+                <!-- Load ReplayWeb.page from free jsDelivr CDN -->
+                <script src="https://cdn.jsdelivr.net/npm/replaywebpage@1.8.11/ui.js"></script>
+
+                <script>
+                    const dropZone = document.getElementById('dropZone');
+                    const fileInput = document.getElementById('fileInput');
+                    const viewer = document.getElementById('viewer');
+
+                    // Prevent default drag behaviors
+                    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {{
+                        dropZone.addEventListener(eventName, preventDefaults, false);
+                        document.body.addEventListener(eventName, preventDefaults, false);
+                    }});
+
+                    function preventDefaults(e) {{
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+
+                    // Highlight drop zone when item is dragged over it
+                    ['dragenter', 'dragover'].forEach(eventName => {{
+                        dropZone.addEventListener(eventName, () => {{
+                            dropZone.classList.add('dragover');
+                        }});
+                    }});
+
+                    ['dragleave', 'drop'].forEach(eventName => {{
+                        dropZone.addEventListener(eventName, () => {{
+                            dropZone.classList.remove('dragover');
+                        }});
+                    }});
+
+                    // Handle dropped files
+                    dropZone.addEventListener('drop', handleDrop);
+                    fileInput.addEventListener('change', handleFiles);
+
+                    function handleDrop(e) {{
+                        const dt = e.dataTransfer;
+                        const files = dt.files;
+                        handleFileLoad(files[0]);
+                    }}
+
+                    function handleFiles(e) {{
+                        const files = e.target.files;
+                        handleFileLoad(files[0]);
+                    }}
+
+                    function handleFileLoad(file) {{
+                        if (!file) return;
+
+                        dropZone.style.display = 'none';
+                        viewer.innerHTML = '<p style="text-align:center; padding:20px;">Loading WARC file...</p>';
+
+                        // Initialize ReplayWeb.page viewer
+                        const replayViewer = document.createElement('replay-web-page');
+                        replayViewer.setAttribute('source', URL.createObjectURL(file));
+                        replayViewer.setAttribute('url', '');
+                        replayViewer.style.width = '100%';
+                        replayViewer.style.height = '800px';
+
+                        viewer.innerHTML = '';
+                        viewer.appendChild(replayViewer);
+                    }}
+                </script>
+            </body>
+            </html>
             """
-            st.markdown(replayweb_html, unsafe_allow_html=True)
+
+            # Display the embedded viewer
+            components.html(replayweb_html, height=900, scrolling=True)
 
     else:  # Basic Viewer
         st.info("📋 **Basic Viewer** - Simple content extraction (no JavaScript rendering)")
