@@ -846,12 +846,14 @@ with st.sidebar:
 
     # Model Selection - Updated with current Groq models
     available_models = {
-        "llama-3.3-70b-versatile": "Llama 3.3 70B Versatile (Recommended, fast & accurate)",
-        "llama-3.1-8b-instant": "Llama 3.1 8B Instant (Fastest, ~800 tok/s)",
-        "llama3-groq-70b-8192-tool-use-preview": "Llama 3 Groq 70B Tool Use (Function calling)",
-        "llama3-groq-8b-8192-tool-use-preview": "Llama 3 Groq 8B Tool Use (Fast tool use)",
-        "mixtral-8x7b-32768": "Mixtral 8x7B (Long context, 32K tokens)",
-        "gemma2-9b-it": "Gemma 2 9B (Lightweight, efficient)"
+        "llama-3.3-70b-versatile": "Llama 3.3 70B Versatile (Recommended, 8K context, fast & accurate)",
+        "llama-3.3-70b-specdec": "Llama 3.3 70B Speculative Decoding (8K context, optimized speed)",
+        "llama-3.1-70b-versatile": "Llama 3.1 70B Versatile (128K context, long documents)",
+        "llama-3.1-8b-instant": "Llama 3.1 8B Instant (128K context, fastest ~800 tok/s)",
+        "llama3-groq-70b-8192-tool-use-preview": "Llama 3 Groq 70B Tool Use (8K context, function calling)",
+        "llama3-groq-8b-8192-tool-use-preview": "Llama 3 Groq 8B Tool Use (8K context, fast tool use)",
+        "mixtral-8x7b-32768": "Mixtral 8x7B (32K context, balanced performance)",
+        "gemma2-9b-it": "Gemma 2 9B (8K context, lightweight & efficient)"
     }
 
     selected_model = st.selectbox(
