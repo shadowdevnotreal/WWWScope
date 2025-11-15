@@ -60,6 +60,10 @@ try:
     if 'groq_api_key_input' in st.session_state and st.session_state.groq_api_key_input:
         ai_helper = GroqAIHelper(api_key=st.session_state.groq_api_key_input)
         AI_AVAILABLE = ai_helper.is_available()
+
+        # Set selected model if available in session state
+        if AI_AVAILABLE and 'groq_selected_model' in st.session_state:
+            ai_helper.model = st.session_state.groq_selected_model
     else:
         ai_helper = get_ai_helper()
         AI_AVAILABLE = is_ai_enabled()
@@ -813,16 +817,24 @@ with st.sidebar:
                 "1. Visit https://console.groq.com\n"
                 "2. Sign up (free, no credit card)\n"
                 "3. Generate API key\n"
-                "4. Paste below or configure in secrets\n\n"
+                "4. Paste below and test\n"
+                "5. Save for future sessions\n\n"
                 "**Alternative Configuration:**\n"
                 "- `.streamlit/secrets.toml`: `groq_api_key = \"key\"`\n"
                 "- Environment: `export GROQ_API_KEY=\"key\"`"
             )
 
-    # API Key Input (always show for easy configuration)
+    # Initialize session state variables
     if 'groq_api_key_input' not in st.session_state:
         st.session_state.groq_api_key_input = ""
+    if 'groq_selected_model' not in st.session_state:
+        st.session_state.groq_selected_model = "llama-3.1-70b-versatile"
+    if 'groq_key_tested' not in st.session_state:
+        st.session_state.groq_key_tested = False
+    if 'groq_test_result' not in st.session_state:
+        st.session_state.groq_test_result = None
 
+    # API Key Input
     api_key_input = st.text_input(
         "Groq API Key",
         value=st.session_state.groq_api_key_input,
@@ -832,38 +844,182 @@ with st.sidebar:
         key="groq_key_input_field"
     )
 
-    # Update session state and try to initialize AI
+    # Model Selection
+    available_models = {
+        "llama-3.1-70b-versatile": "Llama 3.1 70B (Best quality, ~280 tok/s)",
+        "llama-3.1-8b-instant": "Llama 3.1 8B (Faster, ~800 tok/s)",
+        "llama-3.2-90b-text-preview": "Llama 3.2 90B (Experimental)",
+        "mixtral-8x7b-32768": "Mixtral 8x7B (Long context, 32K tokens)",
+        "gemma2-9b-it": "Gemma 2 9B (Lightweight)"
+    }
+
+    selected_model = st.selectbox(
+        "AI Model",
+        options=list(available_models.keys()),
+        format_func=lambda x: available_models[x],
+        index=0,
+        help="Choose which AI model to use. Larger models are slower but more accurate.",
+        key="model_selector"
+    )
+
+    # Update session state if model changed
+    if selected_model != st.session_state.groq_selected_model:
+        st.session_state.groq_selected_model = selected_model
+        # Reset test status when model changes
+        st.session_state.groq_key_tested = False
+
+    # Action buttons
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        test_button = st.button("🧪 Test", use_container_width=True, help="Test if API key works")
+
+    with col2:
+        save_button = st.button("💾 Save", use_container_width=True, help="Save key to secrets.toml", disabled=not api_key_input)
+
+    with col3:
+        clear_button = st.button("🗑️ Clear", use_container_width=True, help="Clear API key")
+
+    # Handle Test button
+    if test_button and api_key_input:
+        with st.spinner("Testing API key..."):
+            try:
+                from core.ai_helper import GroqAIHelper
+                test_helper = GroqAIHelper(api_key=api_key_input)
+                test_helper.model = selected_model
+
+                # Make a simple test request
+                test_response = test_helper._make_request(
+                    system_prompt="You are a helpful assistant.",
+                    user_prompt="Respond with exactly: 'API key works!'",
+                    temperature=0.1,
+                    max_tokens=50
+                )
+
+                if test_response and "API key works" in test_response:
+                    st.session_state.groq_key_tested = True
+                    st.session_state.groq_test_result = "success"
+                    st.success("✅ API key is valid and working!")
+
+                    # Update session state and reinitialize
+                    st.session_state.groq_api_key_input = api_key_input
+                    st.rerun()
+                else:
+                    st.session_state.groq_key_tested = False
+                    st.session_state.groq_test_result = "failed"
+                    st.error("❌ API key test failed. Response was unexpected.")
+
+            except Exception as e:
+                st.session_state.groq_key_tested = False
+                st.session_state.groq_test_result = "error"
+                st.error(f"❌ API key test failed: {str(e)}")
+                st.info("💡 Make sure you copied the complete key from https://console.groq.com")
+
+    # Handle Save button
+    if save_button and api_key_input:
+        try:
+            from pathlib import Path
+            import os
+
+            # Create .streamlit directory if it doesn't exist
+            streamlit_dir = Path.cwd() / ".streamlit"
+            streamlit_dir.mkdir(exist_ok=True)
+
+            secrets_file = streamlit_dir / "secrets.toml"
+
+            # Read existing secrets if file exists
+            existing_content = ""
+            if secrets_file.exists():
+                with open(secrets_file, 'r') as f:
+                    existing_content = f.read()
+
+            # Check if groq_api_key already exists
+            if 'groq_api_key' in existing_content:
+                # Replace existing key
+                import re
+                updated_content = re.sub(
+                    r'groq_api_key\s*=\s*"[^"]*"',
+                    f'groq_api_key = "{api_key_input}"',
+                    existing_content
+                )
+            else:
+                # Add new key
+                updated_content = existing_content.strip() + f'\n\n# Groq AI Configuration\ngroq_api_key = "{api_key_input}"\n'
+
+            # Write to secrets.toml
+            with open(secrets_file, 'w') as f:
+                f.write(updated_content)
+
+            st.success("✅ API key saved to .streamlit/secrets.toml")
+            st.info("🔄 Please restart the app for saved key to take effect")
+
+        except Exception as e:
+            st.error(f"❌ Failed to save API key: {str(e)}")
+            st.info("💡 You may need write permissions in the current directory")
+
+    # Handle Clear button
+    if clear_button:
+        st.session_state.groq_api_key_input = ""
+        st.session_state.groq_key_tested = False
+        st.session_state.groq_test_result = None
+        st.rerun()
+
+    # Update session state when key changes
     if api_key_input and api_key_input != st.session_state.groq_api_key_input:
         st.session_state.groq_api_key_input = api_key_input
-
-        # Trigger rerun to reinitialize with new key
+        st.session_state.groq_key_tested = False  # Reset test status
         st.rerun()
+
+    # Check if key is saved to disk
+    def check_saved_key():
+        try:
+            from pathlib import Path
+            secrets_file = Path.cwd() / ".streamlit" / "secrets.toml"
+            if secrets_file.exists():
+                with open(secrets_file, 'r') as f:
+                    content = f.read()
+                    return 'groq_api_key' in content
+        except:
+            pass
+        return False
 
     # Show current status
     if AI_AVAILABLE and ai_helper:
         st.success("✅ AI is ready to use!")
 
-        col_clear1, col_clear2 = st.columns([3, 1])
-        with col_clear2:
-            if st.button("🗑️ Clear", help="Clear API key", use_container_width=True):
-                st.session_state.groq_api_key_input = ""
-                st.rerun()
+        # Show key source
+        is_saved = check_saved_key()
+        if is_saved:
+            st.caption("🔐 Using saved API key from secrets.toml")
+        else:
+            st.caption("⏱️ Using session API key (will expire on browser close)")
 
-        with st.expander("ℹ️ AI Features Available"):
+        # Update model if different from selected
+        if hasattr(ai_helper, 'model') and ai_helper.model != selected_model:
+            ai_helper.model = selected_model
+            st.info(f"Model changed to: {available_models[selected_model]}")
+
+        with st.expander("ℹ️ AI Features & Status"):
             st.markdown(
+                f"**Current Model:** {available_models.get(selected_model, selected_model)}\n\n"
                 "**Enabled Features:**\n"
                 "- 📝 Archive summarization\n"
                 "- 🔍 Smart diff explanation\n"
                 "- 🏷️ Metadata generation\n"
                 "- 📊 Content classification\n"
                 "- ⚖️ Quality assessment\n\n"
-                "**Model:** Llama 3.1 70B (~280 tok/sec)\n"
-                "**Speed:** Ultra-fast inference\n"
-                "**Cost:** Free tier (30 req/min)"
+                "**Performance:**\n"
+                "- Speed: Ultra-fast inference\n"
+                "- Cost: Free tier (30 req/min, 6K tok/min)\n"
+                f"- Key Storage: {'Saved to disk' if is_saved else 'Session only'}"
             )
-    elif api_key_input:
-        st.warning("⚠️ API key entered but AI not initialized. Check key validity.")
-        st.info("💡 Make sure you copied the complete key from https://console.groq.com")
+
+    elif api_key_input and not AI_AVAILABLE:
+        if st.session_state.groq_test_result == "success":
+            st.warning("⚠️ API key tested successfully but AI not initialized. Try reloading the page.")
+        else:
+            st.warning("⚠️ API key entered. Click 'Test' to verify it works.")
+            st.info("💡 After testing successfully, the app will reload with AI enabled.")
 
     st.markdown("---")
 
