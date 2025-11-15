@@ -368,7 +368,7 @@ Test each Groq model to ensure API functionality:
 2. Verify model changes reflected in AI calls
 
 **Expected:**
-- ✅ Dropdown shows all 8 models
+- ✅ Dropdown shows all 4 models
 - ✅ Model descriptions accurate
 - ✅ Selection persists during session
 - ✅ Different models produce different response styles
@@ -457,7 +457,7 @@ Must show:
 
 **For v2.1.0 to be considered production-ready:**
 
-- [ ] All 8 Groq models working
+- [ ] All 4 Groq models working
 - [ ] Side-by-side comparison functional
 - [ ] At least one archive service (Wayback) working
 - [ ] WARC viewer (basic mode) working
