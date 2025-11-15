@@ -32,7 +32,7 @@ Before testing, ensure you have:
 **Verify:**
 - ✅ Test button works
 - ✅ Success message appears
-- ✅ Model dropdown shows 8 models
+- ✅ Model dropdown shows 4 models
 - ✅ All models have context window info
 
 ---
@@ -103,7 +103,7 @@ Before testing, ensure you have:
 
 ## 🔍 Detailed Feature Verification
 
-### **AI Models - Test All 8**
+### **AI Models - Test All 4**
 
 Run each model individually:
 
@@ -287,7 +287,7 @@ Passed: 10
 
 **Your installation is working correctly if:**
 
-- [ ] All 8 AI models respond successfully
+- [ ] All 4 AI models respond successfully
 - [ ] Text diff shows color-coded changes
 - [ ] AI explains changes in plain English
 - [ ] ReplayWeb.page loads from free CDN (jsDelivr)
