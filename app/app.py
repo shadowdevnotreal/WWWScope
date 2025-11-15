@@ -828,7 +828,7 @@ with st.sidebar:
     if 'groq_api_key_input' not in st.session_state:
         st.session_state.groq_api_key_input = ""
     if 'groq_selected_model' not in st.session_state:
-        st.session_state.groq_selected_model = "llama-3.1-70b-versatile"
+        st.session_state.groq_selected_model = "llama-3.3-70b-versatile"
     if 'groq_key_tested' not in st.session_state:
         st.session_state.groq_key_tested = False
     if 'groq_test_result' not in st.session_state:
@@ -844,13 +844,14 @@ with st.sidebar:
         key="groq_key_input_field"
     )
 
-    # Model Selection
+    # Model Selection - Updated with current Groq models
     available_models = {
-        "llama-3.1-70b-versatile": "Llama 3.1 70B (Best quality, ~280 tok/s)",
-        "llama-3.1-8b-instant": "Llama 3.1 8B (Faster, ~800 tok/s)",
-        "llama-3.2-90b-text-preview": "Llama 3.2 90B (Experimental)",
+        "llama-3.3-70b-versatile": "Llama 3.3 70B Versatile (Recommended, fast & accurate)",
+        "llama-3.1-8b-instant": "Llama 3.1 8B Instant (Fastest, ~800 tok/s)",
+        "llama3-groq-70b-8192-tool-use-preview": "Llama 3 Groq 70B Tool Use (Function calling)",
+        "llama3-groq-8b-8192-tool-use-preview": "Llama 3 Groq 8B Tool Use (Fast tool use)",
         "mixtral-8x7b-32768": "Mixtral 8x7B (Long context, 32K tokens)",
-        "gemma2-9b-it": "Gemma 2 9B (Lightweight)"
+        "gemma2-9b-it": "Gemma 2 9B (Lightweight, efficient)"
     }
 
     selected_model = st.selectbox(

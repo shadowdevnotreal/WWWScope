@@ -31,7 +31,7 @@ class GroqAIHelper:
         """
         self.api_key = api_key
         self.client = None
-        self.model = "llama-3.1-70b-versatile"  # Fast, powerful model
+        self.model = "llama-3.3-70b-versatile"  # Recommended: fast & accurate
         self.available = False
 
         if not GROQ_AVAILABLE:
