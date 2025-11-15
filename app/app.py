@@ -19,6 +19,38 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import threading
+import sys
+
+# Add core modules to path
+sys.path.insert(0, str(Path(__file__).parent / 'core'))
+
+# Import improved archive services
+try:
+    from core.archive_services import (
+        submit_to_wayback,
+        submit_to_archive_today,
+        retrieve_memento_links,
+        process_service,
+        ARCHIVE_SITES,
+        ARCHIVE_TODAY_MIRRORS
+    )
+    IMPROVED_SERVICES_AVAILABLE = True
+except ImportError:
+    IMPROVED_SERVICES_AVAILABLE = False
+    st.warning("⚠️ Improved archive services not available, using basic implementation")
+
+# Import advanced rate limiter
+try:
+    from core.rate_limiter import (
+        rate_limiter,
+        rate_limited,
+        smart_request,
+        session_manager,
+        RetryWithBackoff
+    )
+    RATE_LIMITER_AVAILABLE = True
+except ImportError:
+    RATE_LIMITER_AVAILABLE = False
 
 # Check if Selenium is available
 try:
@@ -99,57 +131,139 @@ from warcio.archiveiterator import ArchiveIterator
 import streamlit.components.v1 as components
 
 def view_warc_content(warc_file: Path):
-    """Display WARC file content in a viewer"""
+    """Display WARC file content with multiple viewer options"""
     st.markdown("### 📄 WARC Content Viewer")
-    
-    try:
-        with open(warc_file, 'rb') as stream:
-            for record in ArchiveIterator(stream):
-                if record.rec_type == 'response':
-                    # Get content
-                    content = record.content_stream().read().decode('utf-8', errors='ignore')
-                    headers = record.http_headers
-                    url = record.rec_headers.get_header('WARC-Target-URI')
-                    
-                    # Display in expandable section
-                    with st.expander(f"🔗 {url}", expanded=False):
-                        st.markdown("#### Headers:")
-                        st.code(str(headers))
-                        st.markdown("#### Content:")
-                        # Create iframe for HTML content
-                        components.html(content, height=600, scrolling=True)
-                        
-                        # Add download button for this page
-                        st.download_button(
-                            "💾 Download Page Content",
-                            content,
-                            file_name=f"page_{url.split('/')[-1]}.html",
-                            mime="text/html"
-                        )
-    except Exception as e:
-        st.error(f"Error reading WARC file: {str(e)}")
 
-# Constants
-ARCHIVE_TODAY_MIRRORS = [
-    "https://archive.today",
-    "https://archive.ph",
-    "https://archive.is",
-    "https://archive.fo"
-]
+    # Viewer selection
+    viewer_mode = st.radio(
+        "Choose viewer:",
+        ["ReplayWeb.page (Recommended)", "Basic Viewer"],
+        horizontal=True,
+        help="ReplayWeb.page provides full-featured WARC playback with proper rendering"
+    )
 
-# Add to your ARCHIVE_SITES constant
-ARCHIVE_SITES = {
-    "Wayback Machine": "https://web.archive.org/save/",
-    "Archive.today": "https://archive.today/submit/",
-    "Memento": "http://timetravel.mementoweb.org/api/json/",
-    "Google Cache": "https://webcache.googleusercontent.com/search?q=cache:",
-    "WebCite": "http://www.webcitation.org/archive/",
-    "Megalodon": "http://megalodon.jp/",
-    "Archive.is": "https://archive.is/",
-    "TimeTravel": "https://timetravel.mementoweb.org/",
-    "Perma.cc": "https://perma.cc/",
-    "WebCite": "http://www.webcitation.org/"
-}
+    if viewer_mode == "ReplayWeb.page (Recommended)":
+        st.info(
+            "🎯 **ReplayWeb.page Viewer**\n\n"
+            "ReplayWeb.page is a professional WARC viewer that provides:\n"
+            "- ✅ Full JavaScript and CSS rendering\n"
+            "- ✅ Proper navigation and interaction\n"
+            "- ✅ Timeline view of captures\n"
+            "- ✅ Works entirely in your browser"
+        )
+
+        # Option 1: Download and open in ReplayWeb.page
+        st.markdown("#### Option 1: Open in ReplayWeb.page")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Download button
+            with open(warc_file, "rb") as file:
+                st.download_button(
+                    label="📥 Download WARC File",
+                    data=file,
+                    file_name=warc_file.name,
+                    mime="application/warc",
+                    help="Download WARC file to your computer"
+                )
+
+        with col2:
+            st.markdown(
+                "[![Open in ReplayWeb.page](https://img.shields.io/badge/Open-ReplayWeb.page-blue)]"
+                "(https://replayweb.page/)",
+                unsafe_allow_html=True
+            )
+
+        st.markdown(
+            "**Instructions:**\n"
+            "1. Click '📥 Download WARC File' above\n"
+            "2. Click 'Open in ReplayWeb.page' or visit https://replayweb.page/\n"
+            "3. Drag and drop your WARC file into ReplayWeb.page\n"
+            "4. Browse the archived site with full functionality!"
+        )
+
+        # Option 2: Embedded ReplayWeb.page viewer
+        st.markdown("#### Option 2: Embedded Viewer (Experimental)")
+        if st.button("🚀 Launch Embedded ReplayWeb.page Viewer"):
+            st.warning(
+                "⚠️ Note: Embedded viewer requires the WARC file to be accessible via URL. "
+                "For best results, use Option 1 above."
+            )
+
+            # Embed ReplayWeb.page
+            replayweb_html = f"""
+            <iframe
+                src="https://replayweb.page/docs/embedding"
+                width="100%"
+                height="800px"
+                style="border:1px solid #ccc;"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+            ></iframe>
+            """
+            st.markdown(replayweb_html, unsafe_allow_html=True)
+
+    else:  # Basic Viewer
+        st.info("📋 **Basic Viewer** - Simple content extraction (no JavaScript rendering)")
+
+        try:
+            with open(warc_file, 'rb') as stream:
+                record_count = 0
+                for record in ArchiveIterator(stream):
+                    if record.rec_type == 'response':
+                        record_count += 1
+                        # Get content
+                        content = record.content_stream().read().decode('utf-8', errors='ignore')
+                        headers = record.http_headers
+                        url = record.rec_headers.get_header('WARC-Target-URI')
+
+                        # Display in expandable section
+                        with st.expander(f"🔗 {url}", expanded=False):
+                            st.markdown("#### HTTP Headers:")
+                            st.code(str(headers), language="http")
+
+                            st.markdown("#### Content Preview:")
+                            st.caption("⚠️ This is a basic HTML render. Use ReplayWeb.page for full functionality.")
+                            # Create iframe for HTML content
+                            components.html(content, height=600, scrolling=True)
+
+                            # Add download button for this page
+                            st.download_button(
+                                "💾 Download Page Content",
+                                content,
+                                file_name=f"page_{url.split('/')[-1]}.html",
+                                mime="text/html",
+                                key=f"download_{record_count}"
+                            )
+
+                if record_count == 0:
+                    st.warning("No response records found in WARC file")
+                else:
+                    st.success(f"✅ Loaded {record_count} pages from WARC file")
+
+        except Exception as e:
+            st.error(f"Error reading WARC file: {str(e)}")
+            st.info("💡 Try using ReplayWeb.page viewer instead for better compatibility")
+
+# Constants (imported from core.archive_services if available)
+if not IMPROVED_SERVICES_AVAILABLE:
+    ARCHIVE_TODAY_MIRRORS = [
+        "https://archive.today",
+        "https://archive.ph",
+        "https://archive.is",
+        "https://archive.fo"
+    ]
+
+    ARCHIVE_SITES = {
+        "Wayback Machine": "https://web.archive.org/save/",
+        "Archive.today": "https://archive.today/submit/",
+        "Memento": "http://timetravel.mementoweb.org/api/json/",
+        "Google Cache": "https://webcache.googleusercontent.com/search?q=cache:",
+        "WebCite": "http://www.webcitation.org/archive/",
+        "Megalodon": "http://megalodon.jp/",
+        "Archive.is": "https://archive.is/",
+        "TimeTravel": "https://timetravel.mementoweb.org/",
+        "Perma.cc": "https://perma.cc/",
+    }
 
 # Create necessary directories if they don't exist
 import tempfile
@@ -283,11 +397,15 @@ def ignore_thread_context_warning():
         warnings.filterwarnings("ignore", message="missing ScriptRunContext")
         yield
 
-@lru_cache(maxsize=100)
-def rate_limited_request(url: str) -> requests.Response:    
+def rate_limited_request(url: str) -> requests.Response:
     """Make a rate-limited request to avoid overwhelming servers."""
-    time.sleep(1)  # Basic rate limiting
-    return requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+    if RATE_LIMITER_AVAILABLE:
+        # Use advanced rate limiter with smart request handling
+        return smart_request(url, service='default', method='GET')
+    else:
+        # Fallback to basic rate limiting
+        time.sleep(1)
+        return requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
 
 def clean_url(url: str) -> str:
     """Clean URL by removing any duplicate protocols."""
@@ -539,133 +657,129 @@ def get_selenium_driver():
         # Don't show error here - let caller handle it
         return None
 
-def submit_to_wayback(url: str) -> str:
-    """Submit URL to Wayback Machine with improved verification."""
-    try:
-        # First check if URL already exists
-        check_url = f"https://archive.org/wayback/available?url={url}"
-        check_response = requests.get(check_url, timeout=30)
-        check_data = check_response.json()
-        
-        if check_data.get('archived_snapshots', {}).get('closest', {}).get('available'):
-            return f"✅ URL already archived: https://web.archive.org/web/*/{url}"
-        
-        # If not archived, submit for archiving
-        response = requests.post(
-            ARCHIVE_SITES["Wayback Machine"],
-            data={"url": url},
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=30,
-        )
-        
-        if response.status_code == 429:
-            return "❌ Rate limit exceeded. Please wait and try again."
-        elif not response.ok:
-            return f"❌ Archive.org failed with status code: {response.status_code}"
-            
-        # Wait and verify
-        time.sleep(5)
-        retries = 3
-        for attempt in range(retries):
-            verify_response = requests.get(check_url, timeout=30)
-            verify_data = verify_response.json()
-            
-            if verify_data.get('archived_snapshots', {}).get('closest', {}).get('available'):
-                return f"✅ Successfully archived: https://web.archive.org/web/*/{url}"
-            
-            st.info(f"Attempt {attempt + 1}: Archive not yet available. Retrying...")
-            time.sleep(10)  # Wait before retrying
+# Archive service functions - Use improved versions if available
+if not IMPROVED_SERVICES_AVAILABLE:
+    # Fallback implementations if improved services not available
+    def submit_to_wayback(url: str) -> str:
+        """Submit URL to Wayback Machine with basic verification."""
+        try:
+            check_url = f"https://archive.org/wayback/available?url={url}"
+            check_response = requests.get(check_url, timeout=30)
+            check_data = check_response.json()
 
-        return "⚠️ Archive submission accepted but not yet available. Please check back later."
-            
-    except Exception as e:
-        return f"⚠️ Error: {str(e)}"
-        
+            if check_data.get('archived_snapshots', {}).get('closest', {}).get('available'):
+                return f"✅ URL already archived: https://web.archive.org/web/*/{url}"
 
-def submit_to_archive_today(url: str) -> str:
-    """Submit URL to Archive.today using requests with retry mechanism."""
-    message = """
-    ⚠️ Archive.today CAPTCHA Notice:
-    
-    If archiving fails due to CAPTCHA:
-    1. Open Archive.today in a new tab
-    2. Solve the CAPTCHA once
-    3. Return here and try again
-    
-    Status: Attempting archive...
-    """
-    st.info(message)
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Referer": random.choice(ARCHIVE_TODAY_MIRRORS)
-    }
+            response = requests.post(
+                ARCHIVE_SITES["Wayback Machine"],
+                data={"url": url},
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=30,
+            )
 
-    for mirror in ARCHIVE_TODAY_MIRRORS:
-        retries = 3
-        for attempt in range(retries):
+            if response.status_code == 429:
+                return "❌ Rate limit exceeded. Please wait and try again."
+            elif not response.ok:
+                return f"❌ Archive.org failed with status code: {response.status_code}"
+
+            time.sleep(5)
+            return "⚠️ Archive submission accepted but not yet available. Please check back later."
+
+        except Exception as e:
+            return f"⚠️ Error: {str(e)}"
+
+
+    def submit_to_archive_today(url: str) -> str:
+        """Submit URL to Archive.today - basic implementation."""
+        st.info("⚠️ Archive.today CAPTCHA Notice: May require manual CAPTCHA solving")
+
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Referer": random.choice(ARCHIVE_TODAY_MIRRORS)
+        }
+
+        for mirror in ARCHIVE_TODAY_MIRRORS:
             try:
                 response = requests.post(
                     f"{mirror}/submit/",
                     data={"url": url},
                     headers=headers,
-                    timeout=60  # Increase timeout
+                    timeout=60
                 )
                 if response.ok:
-                    # Extract the archived URL from the response
                     archived_url = response.url
                     return f"✅ Archived Successfully at {archived_url}"
             except requests.exceptions.RequestException as e:
-                st.warning(f"Attempt {attempt + 1} to {mirror} failed: {e}")
-                time.sleep(2 ** attempt)  # Exponential backoff
                 continue
 
-    return "❌ Archive.today failed on all mirrors."
-    
+        return "❌ Archive.today failed on all mirrors."
 
-def retrieve_memento_links(url: str) -> Dict[str, Any]:
-    """Retrieve archived versions from Memento Web."""
-    try:
-        response = rate_limited_request(f"{ARCHIVE_SITES['Memento']}?url={url}")
-        if response.ok:
-            return response.json()
-        return "No archived versions found."
-    except Exception as e:
-        return f"Error: {str(e)}"
 
-# Update process_service function
-def process_service(service: str, url: str, mode: str) -> str:
-    """Process a single archive service request."""
-    try:
-        if mode == "Archive URL":
-            if service == "Wayback Machine":
-                return submit_to_wayback(url)
-            elif service == "Archive.today":
-                return submit_to_archive_today(url)
-            # Add other services as needed
-        else:  # Retrieve mode
-            base_urls = {
-                "Wayback Machine": f"https://web.archive.org/web/*/{url}",
-                "Archive.today": f"https://archive.today/{url}",
-                "Archive.is": f"https://archive.is/{url}",
-                "Google Cache": f"https://webcache.googleusercontent.com/search?q=cache:{url}",
-                "WebCite": f"http://www.webcitation.org/query?url={url}",
-                "Megalodon": f"http://megalodon.jp/?url={url}",
-                "TimeTravel": f"https://timetravel.mementoweb.org/list/{url}",
-                "Perma.cc": f"https://perma.cc/search?q={url}",
-                "Memento": retrieve_memento_links(url)
-            }
-            
-            if service in base_urls:
-                return base_urls[service]
-            return f"Service {service} not configured for retrieval"
-            
-    except Exception as e:
-        return f"Error processing {service}: {str(e)}"
+    def retrieve_memento_links(url: str) -> Dict[str, Any]:
+        """Retrieve archived versions from Memento Web."""
+        try:
+            response = rate_limited_request(f"{ARCHIVE_SITES['Memento']}?url={url}")
+            if response.ok:
+                return response.json()
+            return {"success": False, "message": "No archived versions found."}
+        except Exception as e:
+            return {"success": False, "message": f"Error: {str(e)}"}
+
+# process_service function - fallback only if improved version not available
+if not IMPROVED_SERVICES_AVAILABLE:
+    def process_service(service: str, url: str, mode: str) -> str:
+        """Process a single archive service request - basic implementation."""
+        try:
+            if mode == "Archive URL":
+                if service == "Wayback Machine":
+                    return submit_to_wayback(url)
+                elif service == "Archive.today":
+                    return submit_to_archive_today(url)
+            else:  # Retrieve mode
+                base_urls = {
+                    "Wayback Machine": f"https://web.archive.org/web/*/{url}",
+                    "Archive.today": f"https://archive.today/{url}",
+                    "Archive.is": f"https://archive.is/{url}",
+                    "Google Cache": f"https://webcache.googleusercontent.com/search?q=cache:{url}",
+                    "WebCite": f"http://www.webcitation.org/query?url={url}",
+                    "Megalodon": f"http://megalodon.jp/?url={url}",
+                    "TimeTravel": f"https://timetravel.mementoweb.org/list/{url}",
+                    "Perma.cc": f"https://perma.cc/search?q={url}",
+                    "Memento": retrieve_memento_links(url)
+                }
+
+                if service in base_urls:
+                    return base_urls[service]
+                return f"Service {service} not configured for retrieval"
+
+        except Exception as e:
+            return f"Error processing {service}: {str(e)}"
 
 # Streamlit UI
 st.title("🌍 WWWScope – Web Archiving & Retrieval")
 st.write("Archive and retrieve web pages from multiple services.")
+
+# System status in sidebar
+with st.sidebar:
+    st.markdown("### 🔧 System Status")
+
+    # Module status indicators
+    if IMPROVED_SERVICES_AVAILABLE:
+        st.success("✅ Enhanced Archive Services")
+    else:
+        st.warning("⚠️ Basic Archive Services")
+
+    if RATE_LIMITER_AVAILABLE:
+        st.success("✅ Advanced Rate Limiting")
+    else:
+        st.warning("⚠️ Basic Rate Limiting")
+
+    if SELENIUM_AVAILABLE:
+        st.success("✅ Screenshot Comparison")
+    else:
+        st.info("ℹ️ Screenshot Feature Disabled")
+
+    st.markdown("---")
 
 # URL input with better validation
 url = st.text_input("Enter the URL to archive or retrieve:", 
