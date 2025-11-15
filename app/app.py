@@ -54,9 +54,15 @@ except ImportError:
 
 # Import AI helper
 try:
-    from core.ai_helper import get_ai_helper, is_ai_enabled
-    ai_helper = get_ai_helper()
-    AI_AVAILABLE = is_ai_enabled()
+    from core.ai_helper import get_ai_helper, is_ai_enabled, GroqAIHelper
+
+    # Initialize from session state if available, otherwise use default
+    if 'groq_api_key_input' in st.session_state and st.session_state.groq_api_key_input:
+        ai_helper = GroqAIHelper(api_key=st.session_state.groq_api_key_input)
+        AI_AVAILABLE = ai_helper.is_available()
+    else:
+        ai_helper = get_ai_helper()
+        AI_AVAILABLE = is_ai_enabled()
 except ImportError:
     AI_AVAILABLE = False
     ai_helper = None
@@ -795,28 +801,79 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # AI Configuration
+    # AI Configuration Section
+    st.markdown("### 🤖 AI Configuration")
+
     if not AI_AVAILABLE:
-        with st.expander("🤖 Enable AI Features"):
+        st.info("AI features are currently disabled")
+
+        with st.expander("📝 Setup Instructions", expanded=False):
             st.markdown(
-                "**Groq AI Enhancement**\n\n"
-                "Enable AI-powered features:\n"
-                "- 📝 Archive summarization\n"
-                "- 🔍 Smart diff analysis\n"
-                "- 🏷️ Content classification\n"
-                "- 🎯 Metadata generation\n"
-                "- 📊 Archive quality assessment\n\n"
-                "**Setup:**\n"
-                "1. Get free API key: https://console.groq.com\n"
-                "2. Add to `.streamlit/secrets.toml`:\n"
-                "   ```toml\n"
-                "   groq_api_key = \"your_key_here\"\n"
-                "   ```\n"
-                "3. Or set environment variable:\n"
-                "   ```bash\n"
-                "   export GROQ_API_KEY=\"your_key_here\"\n"
-                "   ```"
+                "**Get Free Groq API Key:**\n"
+                "1. Visit https://console.groq.com\n"
+                "2. Sign up (free, no credit card)\n"
+                "3. Generate API key\n"
+                "4. Paste below or configure in secrets\n\n"
+                "**Alternative Configuration:**\n"
+                "- `.streamlit/secrets.toml`: `groq_api_key = \"key\"`\n"
+                "- Environment: `export GROQ_API_KEY=\"key\"`"
             )
+
+    # API Key Input (always show for easy configuration)
+    if 'groq_api_key_input' not in st.session_state:
+        st.session_state.groq_api_key_input = ""
+
+    api_key_input = st.text_input(
+        "Groq API Key",
+        value=st.session_state.groq_api_key_input,
+        type="password",
+        placeholder="gsk_...",
+        help="Enter your Groq API key to enable AI features",
+        key="groq_key_input_field"
+    )
+
+    # Update session state and try to initialize AI
+    if api_key_input and api_key_input != st.session_state.groq_api_key_input:
+        st.session_state.groq_api_key_input = api_key_input
+
+        # Trigger rerun to reinitialize with new key
+        st.rerun()
+
+    # Show current status
+    if AI_AVAILABLE and ai_helper:
+        st.success("✅ AI is ready to use!")
+
+        col_clear1, col_clear2 = st.columns([3, 1])
+        with col_clear2:
+            if st.button("🗑️ Clear", help="Clear API key", use_container_width=True):
+                st.session_state.groq_api_key_input = ""
+                st.rerun()
+
+        with st.expander("ℹ️ AI Features Available"):
+            st.markdown(
+                "**Enabled Features:**\n"
+                "- 📝 Archive summarization\n"
+                "- 🔍 Smart diff explanation\n"
+                "- 🏷️ Metadata generation\n"
+                "- 📊 Content classification\n"
+                "- ⚖️ Quality assessment\n\n"
+                "**Model:** Llama 3.1 70B (~280 tok/sec)\n"
+                "**Speed:** Ultra-fast inference\n"
+                "**Cost:** Free tier (30 req/min)"
+            )
+    elif api_key_input:
+        st.warning("⚠️ API key entered but AI not initialized. Check key validity.")
+        st.info("💡 Make sure you copied the complete key from https://console.groq.com")
+
+    st.markdown("---")
+
+    # Quick Links
+    st.markdown("### 🔗 Quick Links")
+    st.markdown(
+        "- [Get Groq API Key](https://console.groq.com)\n"
+        "- [AI Features Docs](https://github.com/shadowdevnotreal/WWWScope/blob/main/AI_FEATURES.md)\n"
+        "- [ReplayWeb.page](https://replayweb.page/)"
+    )
 
 # URL input with better validation
 url = st.text_input("Enter the URL to archive or retrieve:", 
