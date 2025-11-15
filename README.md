@@ -102,12 +102,15 @@ Transform your web archiving workflow with cutting-edge AI capabilities powered 
 - **Speed:** ~280 tokens/second (7x faster than GPT-4)
 - **Cost:** Free tier includes 30 requests/minute, 6,000 tokens/minute
 
-**Available Models:**
-- Llama 3.3 70B Versatile (Recommended - fast & accurate)
-- Llama 3.1 8B Instant (Fastest - ~800 tokens/sec)
-- Llama 3 Groq 70B Tool Use (Function calling support)
-- Mixtral 8x7B (Long context - 32K tokens)
-- Gemma 2 9B (Lightweight & efficient)
+**Available Models (8 total):**
+- **Llama 3.3 70B Versatile** - Recommended (8K context, fast & accurate)
+- **Llama 3.3 70B Speculative Decoding** - Optimized speed (8K context)
+- **Llama 3.1 70B Versatile** - Long documents (128K context) 🔥
+- **Llama 3.1 8B Instant** - Fastest (128K context, ~800 tok/s) ⚡
+- **Llama 3 Groq 70B Tool Use** - Function calling (8K context)
+- **Llama 3 Groq 8B Tool Use** - Fast tool use (8K context)
+- **Mixtral 8x7B** - Balanced performance (32K context)
+- **Gemma 2 9B** - Lightweight & efficient (8K context)
 
 **Quick Setup:**
 1. Get free API key from [console.groq.com](https://console.groq.com)
