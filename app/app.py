@@ -52,6 +52,15 @@ try:
 except ImportError:
     RATE_LIMITER_AVAILABLE = False
 
+# Import AI helper
+try:
+    from core.ai_helper import get_ai_helper, is_ai_enabled
+    ai_helper = get_ai_helper()
+    AI_AVAILABLE = is_ai_enabled()
+except ImportError:
+    AI_AVAILABLE = False
+    ai_helper = None
+
 # Check if Selenium is available
 try:
     from selenium import webdriver
@@ -779,7 +788,35 @@ with st.sidebar:
     else:
         st.info("ℹ️ Screenshot Feature Disabled")
 
+    if AI_AVAILABLE:
+        st.success("🤖 AI Features Enabled")
+    else:
+        st.info("ℹ️ AI Features Disabled")
+
     st.markdown("---")
+
+    # AI Configuration
+    if not AI_AVAILABLE:
+        with st.expander("🤖 Enable AI Features"):
+            st.markdown(
+                "**Groq AI Enhancement**\n\n"
+                "Enable AI-powered features:\n"
+                "- 📝 Archive summarization\n"
+                "- 🔍 Smart diff analysis\n"
+                "- 🏷️ Content classification\n"
+                "- 🎯 Metadata generation\n"
+                "- 📊 Archive quality assessment\n\n"
+                "**Setup:**\n"
+                "1. Get free API key: https://console.groq.com\n"
+                "2. Add to `.streamlit/secrets.toml`:\n"
+                "   ```toml\n"
+                "   groq_api_key = \"your_key_here\"\n"
+                "   ```\n"
+                "3. Or set environment variable:\n"
+                "   ```bash\n"
+                "   export GROQ_API_KEY=\"your_key_here\"\n"
+                "   ```"
+            )
 
 # URL input with better validation
 url = st.text_input("Enter the URL to archive or retrieve:", 
@@ -1201,6 +1238,30 @@ with tab3:
                                     "lines starting with `+` (green) were added."
                                 )
                                 st.code(diff_text, language="diff")
+
+                                # AI-powered diff explanation
+                                if AI_AVAILABLE and ai_helper:
+                                    st.markdown("---")
+                                    if st.button("🤖 Explain Changes (AI)", use_container_width=True, key="ai_explain_diff"):
+                                        with st.spinner("🤖 AI analyzing changes..."):
+                                            explanation = ai_helper.explain_diff(
+                                                diff_text,
+                                                text1[:1000],
+                                                text2[:1000]
+                                            )
+
+                                            if explanation:
+                                                st.markdown("### 🤖 AI Analysis: What Changed?")
+                                                st.info(explanation)
+
+                                                # Also check if changes are significant
+                                                significance = ai_helper.detect_content_changes_significance(diff_text)
+                                                if significance:
+                                                    st.markdown("**Change Significance:**")
+                                                    st.write(significance)
+                                            else:
+                                                st.error("AI analysis failed. Please try again.")
+
                             else:
                                 st.success("✅ No text differences detected! The content appears identical.")
 
@@ -1286,7 +1347,59 @@ with tab4:
                 # Add View button
                 if st.button(f"👀 View Content", key=f"view_{info['name']}"):
                     view_warc_content(warc)
-                
+
+                # AI Analysis section
+                if AI_AVAILABLE and ai_helper:
+                    st.markdown("---")
+                    st.markdown("**🤖 AI Analysis**")
+
+                    ai_col1, ai_col2 = st.columns(2)
+
+                    with ai_col1:
+                        if st.button(f"📝 Summarize", key=f"ai_summarize_{info['name']}"):
+                            with st.spinner("🤖 AI analyzing archive..."):
+                                try:
+                                    # Extract content from WARC
+                                    with open(warc, 'rb') as stream:
+                                        for record in ArchiveIterator(stream):
+                                            if record.rec_type == 'response':
+                                                content = record.content_stream().read().decode('utf-8', errors='ignore')
+                                                url = record.rec_headers.get_header('WARC-Target-URI')
+
+                                                # Get summary
+                                                summary = ai_helper.summarize_archive_content(content)
+                                                if summary:
+                                                    st.markdown("**📝 Archive Summary:**")
+                                                    st.info(summary)
+
+                                                # Only process first record for summary
+                                                break
+                                except Exception as e:
+                                    st.error(f"Analysis failed: {str(e)}")
+
+                    with ai_col2:
+                        if st.button(f"🏷️ Generate Metadata", key=f"ai_metadata_{info['name']}"):
+                            with st.spinner("🤖 Generating metadata..."):
+                                try:
+                                    # Extract content from WARC
+                                    with open(warc, 'rb') as stream:
+                                        for record in ArchiveIterator(stream):
+                                            if record.rec_type == 'response':
+                                                content = record.content_stream().read().decode('utf-8', errors='ignore')
+                                                url = record.rec_headers.get_header('WARC-Target-URI')
+
+                                                # Generate metadata
+                                                metadata = ai_helper.generate_archive_metadata(url, content)
+                                                if metadata:
+                                                    st.markdown("**🏷️ AI-Generated Metadata:**")
+                                                    st.json(metadata)
+
+                                                # Only process first record
+                                                break
+                                except Exception as e:
+                                    st.error(f"Metadata generation failed: {str(e)}")
+
+                st.markdown("---")
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     if st.button(f"🔄 Sync", key=f"sync_{info['name']}"):
