@@ -71,16 +71,7 @@ except ImportError:
     AI_AVAILABLE = False
     ai_helper = None
 
-# Check if Selenium is available
-try:
-    from selenium import webdriver
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.chrome.service import Service
-    from webdriver_manager.chrome import ChromeDriverManager
-    from selenium.webdriver.chrome.options import Options
-    SELENIUM_AVAILABLE = True
-except ImportError:
-    SELENIUM_AVAILABLE = False
+# Selenium removed - screenshot comparison feature disabled
 
 
 def create_warc_record(url: str, response: requests.Response, date: str) -> str:
@@ -552,42 +543,6 @@ def validate_url(url: str) -> bool:
     except:
         return False
 
-def take_screenshot(url: str, filename: str) -> Path:
-    """Take a screenshot of a URL using Selenium with proper cleanup."""
-    driver = None
-    try:
-        if not SELENIUM_AVAILABLE:
-            return None
-
-        driver = get_selenium_driver()
-        if not driver:
-            return None
-
-        # Load page with timeout
-        driver.get(url)
-        time.sleep(3)  # Increased wait time for complex archive pages
-
-        # Take screenshot
-        screenshot_path = TEMP_DIR / filename
-        driver.save_screenshot(str(screenshot_path))
-
-        # Verify file was created
-        if screenshot_path.exists():
-            return screenshot_path
-        else:
-            return None
-
-    except Exception as e:
-        # Don't display warning here - let caller handle it
-        return None
-    finally:
-        # Guaranteed cleanup
-        if driver:
-            try:
-                driver.quit()
-            except:
-                pass  # Ignore cleanup errors
-
 def extract_text_from_url(url: str) -> str:
     """Extract visible text content from a URL with rate limit handling."""
     try:
@@ -664,77 +619,48 @@ def compare_archives(url1: str, url2: str) -> None:
         # Add comparison tools
         st.markdown("### Comparison Tools")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("📸 Screenshot Comparison"):
-                with st.spinner("Taking screenshots..."):
-                    if not SELENIUM_AVAILABLE:
-                        st.warning(
-                            "📸 Screenshot Feature\n\n"
-                            "Screenshot comparison requires Selenium. Install with:\n"
-                            "```\n"
-                            "pip install selenium webdriver-manager\n"
-                            "```\n\n"
-                            "For now, use the iframe preview above for visual comparison."
-                        )
+        if st.button("📊 Text Diff"):
+            with st.spinner("Extracting and comparing text..."):
+                text1 = extract_text_from_url(url1)
+                text2 = extract_text_from_url(url2)
+
+                if not text1.startswith("Error") and not text2.startswith("Error"):
+                    diff = compare_text_diff(text1, text2)
+
+                    st.markdown("### 📊 Text Difference Analysis")
+
+                    # Show statistics
+                    col_a, col_b, col_c = st.columns(3)
+                    with col_a:
+                        st.metric("Version 1 Length", f"{len(text1)} chars")
+                    with col_b:
+                        st.metric("Version 2 Length", f"{len(text2)} chars")
+                    with col_c:
+                        diff_lines = [line for line in diff.splitlines() if line.startswith(('+', '-'))]
+                        st.metric("Changed Lines", len(diff_lines))
+
+                    # Show diff
+                    st.markdown("#### Detailed Differences")
+                    st.markdown(
+                        "Lines starting with `-` were removed, lines starting with `+` were added."
+                    )
+
+                    if diff:
+                        st.code(diff, language="diff")
                     else:
-                        screenshot1 = take_screenshot(url1, "screenshot1.png")
-                        screenshot2 = take_screenshot(url2, "screenshot2.png")
+                        st.success("✅ No text differences detected! The content appears identical.")
 
-                        if screenshot1 and screenshot2:
-                            st.markdown("### 📸 Screenshot Comparison")
-                            col_a, col_b = st.columns(2)
-                            with col_a:
-                                st.image(str(screenshot1), caption="Version 1", use_column_width=True)
-                            with col_b:
-                                st.image(str(screenshot2), caption="Version 2", use_column_width=True)
-                            st.success("Screenshots captured successfully!")
-                        else:
-                            st.error("Failed to capture screenshots. Please ensure Chrome/Chromium is installed.")
-
-        with col2:
-            if st.button("📊 Text Diff"):
-                with st.spinner("Extracting and comparing text..."):
-                    text1 = extract_text_from_url(url1)
-                    text2 = extract_text_from_url(url2)
-
-                    if not text1.startswith("Error") and not text2.startswith("Error"):
-                        diff = compare_text_diff(text1, text2)
-
-                        st.markdown("### 📊 Text Difference Analysis")
-
-                        # Show statistics
-                        col_a, col_b, col_c = st.columns(3)
+                    # Show side-by-side text samples
+                    with st.expander("📄 View Full Text Content"):
+                        col_a, col_b = st.columns(2)
                         with col_a:
-                            st.metric("Version 1 Length", f"{len(text1)} chars")
+                            st.markdown("**Version 1 Text:**")
+                            st.text_area("", text1[:5000], height=300, key="text1")
                         with col_b:
-                            st.metric("Version 2 Length", f"{len(text2)} chars")
-                        with col_c:
-                            diff_lines = [line for line in diff.splitlines() if line.startswith(('+', '-'))]
-                            st.metric("Changed Lines", len(diff_lines))
-
-                        # Show diff
-                        st.markdown("#### Detailed Differences")
-                        st.markdown(
-                            "Lines starting with `-` were removed, lines starting with `+` were added."
-                        )
-
-                        if diff:
-                            st.code(diff, language="diff")
-                        else:
-                            st.success("✅ No text differences detected! The content appears identical.")
-
-                        # Show side-by-side text samples
-                        with st.expander("📄 View Full Text Content"):
-                            col_a, col_b = st.columns(2)
-                            with col_a:
-                                st.markdown("**Version 1 Text:**")
-                                st.text_area("", text1[:5000], height=300, key="text1")
-                            with col_b:
-                                st.markdown("**Version 2 Text:**")
-                                st.text_area("", text2[:5000], height=300, key="text2")
-                    else:
-                        st.error(f"Failed to extract text:\n{text1}\n{text2}")
+                            st.markdown("**Version 2 Text:**")
+                            st.text_area("", text2[:5000], height=300, key="text2")
+                else:
+                    st.error(f"Failed to extract text:\n{text1}\n{text2}")
 
         # Add URLs for manual comparison
         st.markdown("### 🔗 Direct Links")
@@ -759,26 +685,6 @@ def verify_archive_status(url: str, service: str) -> bool:
         return True  # Default to True for other services
     except:
         return False
-
-def get_selenium_driver():
-    """Initialize and return a configured Selenium WebDriver."""
-    if not SELENIUM_AVAILABLE:
-        return None
-
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")  # Full HD screenshots
-
-    try:
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-        return driver
-    except Exception as e:
-        # Don't show error here - let caller handle it
-        return None
 
 # Archive service functions - Use improved versions if available
 if not IMPROVED_SERVICES_AVAILABLE:
@@ -896,11 +802,6 @@ with st.sidebar:
         st.success("✅ Advanced Rate Limiting")
     else:
         st.warning("⚠️ Basic Rate Limiting")
-
-    if SELENIUM_AVAILABLE:
-        st.success("✅ Screenshot Comparison")
-    else:
-        st.info("ℹ️ Screenshot Feature Disabled")
 
     if AI_AVAILABLE:
         st.success("🤖 AI Features Enabled")
@@ -1410,197 +1311,138 @@ with tab3:
 
         st.markdown("---")
 
-        # Comparison Tools - NOW OUTSIDE compare_archives() function!
-        st.markdown("### 🔧 Comparison Tools")
-
-        tool_col1, tool_col2 = st.columns(2)
-
-        # Screenshot Comparison Tool
-        with tool_col1:
-            if st.button("📸 Screenshot Comparison", use_container_width=True, key="screenshot_btn"):
-                if not SELENIUM_AVAILABLE:
-                    st.warning(
-                        "📸 **Screenshot Feature Unavailable**\n\n"
-                        "Screenshot comparison requires Selenium and Chrome/Chromium.\n\n"
-                        "**Installation:**\n"
-                        "1. Install Selenium: `pip install selenium webdriver-manager`\n"
-                        "2. Install Chrome:\n"
-                        "   - Linux: `sudo apt-get install chromium-browser`\n"
-                        "   - Windows/Mac: Download from google.com/chrome\n\n"
-                        "For now, use the iframe preview above for visual comparison."
-                    )
-                else:
-                    with st.spinner("📸 Taking screenshots... This may take 10-20 seconds..."):
-                        try:
-                            screenshot1 = take_screenshot(url1, "screenshot1.png")
-                            screenshot2 = take_screenshot(url2, "screenshot2.png")
-
-                            if screenshot1 and screenshot2 and screenshot1.exists() and screenshot2.exists():
-                                st.markdown("### 📸 Screenshot Comparison Results")
-
-                                # Side-by-side comparison (constrained by column width)
-                                img_col1, img_col2 = st.columns(2)
-                                with img_col1:
-                                    st.image(str(screenshot1), caption="Version 1", use_column_width=True)
-                                with img_col2:
-                                    st.image(str(screenshot2), caption="Version 2", use_column_width=True)
-
-                                st.success("✅ Screenshots captured successfully!")
-
-                                # Full-size view in expanders
-                                st.markdown("#### 🔍 View Full-Size Screenshots")
-                                st.info("💡 Click below to view screenshots at full resolution (1920x1080)")
-
-                                with st.expander("🖼️ Version 1 - Full Size", expanded=False):
-                                    st.image(str(screenshot1), caption=f"Version 1 - Full Resolution: {url1}", use_column_width=False)
-
-                                with st.expander("🖼️ Version 2 - Full Size", expanded=False):
-                                    st.image(str(screenshot2), caption=f"Version 2 - Full Resolution: {url2}", use_column_width=False)
-                            else:
-                                st.error(
-                                    "❌ **Screenshot capture failed.**\n\n"
-                                    "**Possible reasons:**\n"
-                                    "- Chrome/Chromium is not installed\n"
-                                    "- WebDriver initialization failed\n"
-                                    "- URLs could not be loaded (check accessibility)\n"
-                                    "- Permission issues writing screenshots\n\n"
-                                    "**Troubleshooting:**\n"
-                                    "- Ensure Chrome is installed and accessible\n"
-                                    "- Check that URLs are accessible and not blocking automated access"
-                                )
-                        except Exception as e:
-                            st.error(f"❌ Screenshot error: {str(e)}")
+        # Comparison Tools
+        st.markdown("### 🔧 Comparison Tool")
 
         # Text Diff Tool
-        with tool_col2:
-            if st.button("📊 Text Diff Analysis", use_container_width=True, key="textdiff_btn"):
-                with st.spinner("📊 Extracting and comparing text... This may take 10-30 seconds..."):
-                    try:
-                        text1 = extract_text_from_url(url1)
-                        text2 = extract_text_from_url(url2)
+        if st.button("📊 Text Diff Analysis", use_container_width=True, key="textdiff_btn"):
+            with st.spinner("📊 Extracting and comparing text... This may take 10-30 seconds..."):
+                try:
+                    text1 = extract_text_from_url(url1)
+                    text2 = extract_text_from_url(url2)
 
-                        # Check for errors with specific handling
-                        has_error = False
+                    # Check for errors with specific handling
+                    has_error = False
 
-                        if text1.startswith("RATE_LIMIT") or text2.startswith("RATE_LIMIT"):
-                            st.error("⏱️ **Rate Limit Exceeded**")
-                            st.warning(
-                                "The archive service has rate limited your requests. This happens when:\n"
-                                "- You make too many requests in a short time\n"
-                                "- The archive service (archive.ph, archive.today, etc.) is protecting against automated access\n\n"
-                                "**Solutions:**\n"
-                                "1. ⏳ Wait 60-120 seconds before trying again\n"
-                                "2. 📸 Use the Screenshot Comparison instead (doesn't trigger rate limits)\n"
-                                "3. 👁️ Use the iframe preview above to view the archives visually\n"
-                                "4. 🔗 Use the direct links below to open archives in your browser"
+                    if text1.startswith("RATE_LIMIT") or text2.startswith("RATE_LIMIT"):
+                        st.error("⏱️ **Rate Limit Exceeded**")
+                        st.warning(
+                            "The archive service has rate limited your requests. This happens when:\n"
+                            "- You make too many requests in a short time\n"
+                            "- The archive service (archive.ph, archive.today, etc.) is protecting against automated access\n\n"
+                            "**Solutions:**\n"
+                            "1. ⏳ Wait 60-120 seconds before trying again\n"
+                            "2. 📸 Use the Screenshot Comparison instead (doesn't trigger rate limits)\n"
+                            "3. 👁️ Use the iframe preview above to view the archives visually\n"
+                            "4. 🔗 Use the direct links below to open archives in your browser"
+                        )
+                        has_error = True
+                    elif text1.startswith("ACCESS_DENIED") or text2.startswith("ACCESS_DENIED"):
+                        st.error("🚫 **Access Denied (403 Forbidden)**")
+                        st.info(
+                            "The archive service blocked automated access. This may require:\n"
+                            "- Opening the URL in a browser\n"
+                            "- Solving a CAPTCHA\n"
+                            "- Using a different archive service\n\n"
+                            "💡 Try the Screenshot Comparison or direct links instead."
+                        )
+                        has_error = True
+                    elif text1.startswith("NOT_FOUND") or text2.startswith("NOT_FOUND"):
+                        st.error("❌ **Archive Not Found (404)**")
+                        st.info("One or both URLs may not be archived. Check the direct links below.")
+                        has_error = True
+                    elif text1.startswith(("HTTP_ERROR", "TIMEOUT", "CONNECTION_ERROR", "SSL_ERROR", "Error")):
+                        if text1.startswith(("HTTP_ERROR", "TIMEOUT", "CONNECTION_ERROR", "SSL_ERROR", "Error")):
+                            st.error(f"❌ **Failed to extract text from Version 1:**\n{text1}")
+                        if text2.startswith(("HTTP_ERROR", "TIMEOUT", "CONNECTION_ERROR", "SSL_ERROR", "Error")):
+                            st.error(f"❌ **Failed to extract text from Version 2:**\n{text2}")
+                        st.info("💡 Try using the iframe preview or Screenshot Comparison instead.")
+                        has_error = True
+
+                    if has_error:
+                        pass  # Error already displayed above
+                    elif not text1 or not text2:
+                        st.error("❌ One or both URLs returned empty content.")
+                    else:
+                        # Generate diff
+                        import difflib
+                        lines1 = text1.splitlines()
+                        lines2 = text2.splitlines()
+                        diff = difflib.unified_diff(lines1, lines2, fromfile='Version 1', tofile='Version 2', lineterm='', n=3)
+                        diff_text = '\n'.join(diff)
+
+                        # Calculate real changed lines (excluding diff headers)
+                        diff_lines = [line for line in diff_text.splitlines()
+                                    if line.startswith(('+', '-'))
+                                    and not line.startswith(('---', '+++'))]
+
+                        st.markdown("### 📊 Text Difference Analysis Results")
+
+                        # Statistics
+                        metric_col1, metric_col2, metric_col3 = st.columns(3)
+                        with metric_col1:
+                            st.metric("Version 1 Length", f"{len(text1):,} chars")
+                        with metric_col2:
+                            st.metric("Version 2 Length", f"{len(text2):,} chars")
+                        with metric_col3:
+                            st.metric("Changed Lines", len(diff_lines))
+
+                        # Show diff
+                        st.markdown("#### Detailed Differences")
+
+                        if diff_lines:
+                            st.markdown(
+                                "**Legend:** Lines starting with `-` (red) were removed, "
+                                "lines starting with `+` (green) were added."
                             )
-                            has_error = True
-                        elif text1.startswith("ACCESS_DENIED") or text2.startswith("ACCESS_DENIED"):
-                            st.error("🚫 **Access Denied (403 Forbidden)**")
-                            st.info(
-                                "The archive service blocked automated access. This may require:\n"
-                                "- Opening the URL in a browser\n"
-                                "- Solving a CAPTCHA\n"
-                                "- Using a different archive service\n\n"
-                                "💡 Try the Screenshot Comparison or direct links instead."
-                            )
-                            has_error = True
-                        elif text1.startswith("NOT_FOUND") or text2.startswith("NOT_FOUND"):
-                            st.error("❌ **Archive Not Found (404)**")
-                            st.info("One or both URLs may not be archived. Check the direct links below.")
-                            has_error = True
-                        elif text1.startswith(("HTTP_ERROR", "TIMEOUT", "CONNECTION_ERROR", "SSL_ERROR", "Error")):
-                            if text1.startswith(("HTTP_ERROR", "TIMEOUT", "CONNECTION_ERROR", "SSL_ERROR", "Error")):
-                                st.error(f"❌ **Failed to extract text from Version 1:**\n{text1}")
-                            if text2.startswith(("HTTP_ERROR", "TIMEOUT", "CONNECTION_ERROR", "SSL_ERROR", "Error")):
-                                st.error(f"❌ **Failed to extract text from Version 2:**\n{text2}")
-                            st.info("💡 Try using the iframe preview or Screenshot Comparison instead.")
-                            has_error = True
+                            st.code(diff_text, language="diff")
 
-                        if has_error:
-                            pass  # Error already displayed above
-                        elif not text1 or not text2:
-                            st.error("❌ One or both URLs returned empty content.")
+                            # AI-powered diff explanation
+                            if AI_AVAILABLE and ai_helper:
+                                st.markdown("---")
+                                if st.button("🤖 Explain Changes (AI)", use_container_width=True, key="ai_explain_diff"):
+                                    with st.spinner("🤖 AI analyzing changes..."):
+                                        explanation = ai_helper.explain_diff(
+                                            diff_text,
+                                            text1[:1000],
+                                            text2[:1000]
+                                        )
+
+                                        if explanation:
+                                            st.markdown("### 🤖 AI Analysis: What Changed?")
+                                            st.info(explanation)
+
+                                            # Also check if changes are significant
+                                            significance = ai_helper.detect_content_changes_significance(diff_text)
+                                            if significance:
+                                                st.markdown("**Change Significance:**")
+                                                st.write(significance)
+                                        else:
+                                            st.error("AI analysis failed. Please try again.")
+
                         else:
-                            # Generate diff
-                            import difflib
-                            lines1 = text1.splitlines()
-                            lines2 = text2.splitlines()
-                            diff = difflib.unified_diff(lines1, lines2, fromfile='Version 1', tofile='Version 2', lineterm='', n=3)
-                            diff_text = '\n'.join(diff)
+                            st.success("✅ No text differences detected! The content appears identical.")
 
-                            # Calculate real changed lines (excluding diff headers)
-                            diff_lines = [line for line in diff_text.splitlines()
-                                        if line.startswith(('+', '-'))
-                                        and not line.startswith(('---', '+++'))]
+                        # Side-by-side text preview
+                        with st.expander("📄 View Full Text Content"):
+                            text_col1, text_col2 = st.columns(2)
+                            with text_col1:
+                                chars_shown = min(5000, len(text1))
+                                st.markdown(f"**Version 1 Text** ({len(text1):,} total chars, showing first {chars_shown:,})")
+                                display_text1 = text1[:5000] + ("\n\n... (truncated)" if len(text1) > 5000 else "")
+                                st.text_area("", display_text1, height=300, key="text_display_1")
+                            with text_col2:
+                                chars_shown = min(5000, len(text2))
+                                st.markdown(f"**Version 2 Text** ({len(text2):,} total chars, showing first {chars_shown:,})")
+                                display_text2 = text2[:5000] + ("\n\n... (truncated)" if len(text2) > 5000 else "")
+                                st.text_area("", display_text2, height=300, key="text_display_2")
 
-                            st.markdown("### 📊 Text Difference Analysis Results")
-
-                            # Statistics
-                            metric_col1, metric_col2, metric_col3 = st.columns(3)
-                            with metric_col1:
-                                st.metric("Version 1 Length", f"{len(text1):,} chars")
-                            with metric_col2:
-                                st.metric("Version 2 Length", f"{len(text2):,} chars")
-                            with metric_col3:
-                                st.metric("Changed Lines", len(diff_lines))
-
-                            # Show diff
-                            st.markdown("#### Detailed Differences")
-
-                            if diff_lines:
-                                st.markdown(
-                                    "**Legend:** Lines starting with `-` (red) were removed, "
-                                    "lines starting with `+` (green) were added."
-                                )
-                                st.code(diff_text, language="diff")
-
-                                # AI-powered diff explanation
-                                if AI_AVAILABLE and ai_helper:
-                                    st.markdown("---")
-                                    if st.button("🤖 Explain Changes (AI)", use_container_width=True, key="ai_explain_diff"):
-                                        with st.spinner("🤖 AI analyzing changes..."):
-                                            explanation = ai_helper.explain_diff(
-                                                diff_text,
-                                                text1[:1000],
-                                                text2[:1000]
-                                            )
-
-                                            if explanation:
-                                                st.markdown("### 🤖 AI Analysis: What Changed?")
-                                                st.info(explanation)
-
-                                                # Also check if changes are significant
-                                                significance = ai_helper.detect_content_changes_significance(diff_text)
-                                                if significance:
-                                                    st.markdown("**Change Significance:**")
-                                                    st.write(significance)
-                                            else:
-                                                st.error("AI analysis failed. Please try again.")
-
-                            else:
-                                st.success("✅ No text differences detected! The content appears identical.")
-
-                            # Side-by-side text preview
-                            with st.expander("📄 View Full Text Content"):
-                                text_col1, text_col2 = st.columns(2)
-                                with text_col1:
-                                    chars_shown = min(5000, len(text1))
-                                    st.markdown(f"**Version 1 Text** ({len(text1):,} total chars, showing first {chars_shown:,})")
-                                    display_text1 = text1[:5000] + ("\n\n... (truncated)" if len(text1) > 5000 else "")
-                                    st.text_area("", display_text1, height=300, key="text_display_1")
-                                with text_col2:
-                                    chars_shown = min(5000, len(text2))
-                                    st.markdown(f"**Version 2 Text** ({len(text2):,} total chars, showing first {chars_shown:,})")
-                                    display_text2 = text2[:5000] + ("\n\n... (truncated)" if len(text2) > 5000 else "")
-                                    st.text_area("", display_text2, height=300, key="text_display_2")
-
-                    except requests.exceptions.Timeout:
-                        st.error("⏱️ Request timed out. The URLs may be too slow to respond (>30s).")
-                    except requests.exceptions.ConnectionError:
-                        st.error("🔌 Connection error. Please check your internet connection.")
-                    except Exception as e:
-                        st.error(f"❌ Unexpected error during text extraction: {str(e)}")
+                except requests.exceptions.Timeout:
+                    st.error("⏱️ Request timed out. The URLs may be too slow to respond (>30s).")
+                except requests.exceptions.ConnectionError:
+                    st.error("🔌 Connection error. Please check your internet connection.")
+                except Exception as e:
+                    st.error(f"❌ Unexpected error during text extraction: {str(e)}")
 
         # Direct links
         st.markdown("---")

@@ -193,30 +193,6 @@ def test_warc_handling():
         return False
 
 
-def test_selenium():
-    """Test Selenium availability"""
-    print_test("Selenium (Screenshot Feature)")
-
-    try:
-        from selenium import webdriver
-        from selenium.webdriver.chrome.options import Options
-        print_pass("Selenium imported successfully")
-
-        # Try to verify ChromeDriver availability (don't actually launch)
-        try:
-            from webdriver_manager.chrome import ChromeDriverManager
-            print_pass("ChromeDriver manager available")
-            print_info("Screenshot comparison feature available")
-        except:
-            print_info("ChromeDriver manager not available")
-
-        return True
-
-    except ImportError:
-        print_info("Selenium not available (screenshot feature disabled)")
-        return False
-
-
 def test_beautifulsoup():
     """Test BeautifulSoup for text extraction"""
     print_test("BeautifulSoup (Text Diff)")
@@ -354,7 +330,6 @@ def run_all_tests():
         ("Archive Services", test_archive_services),
         ("Rate Limiter", test_rate_limiter),
         ("Internet Archive", test_internet_archive),
-        ("Selenium (Screenshots)", test_selenium),
         ("Free CDN (ReplayWeb.page)", test_cdn_availability),
         ("Groq AI Models", test_groq_models),
     ]
